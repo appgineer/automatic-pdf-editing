@@ -1,5 +1,6 @@
 """파이프라인 실행"""
 
+import gc
 import logging
 import shutil
 import threading
@@ -54,10 +55,10 @@ class PipelineRunner:
         job.status = JobStatus.RUNNING
         self._notify()
 
+        tmp_dir = tempfile.mkdtemp()
         try:
-            with tempfile.TemporaryDirectory() as tmp_dir:
-                tmp = Path(tmp_dir)
-                self._run_pipeline(job, tmp)
+            tmp = Path(tmp_dir)
+            self._run_pipeline(job, tmp)
 
             job.status = JobStatus.DONE
             job.current_step = "완료"
@@ -72,6 +73,13 @@ class PipelineRunner:
             job.error_message = str(e)
             job.current_step = f"오류: {e}"
             logger.error(f"작업 오류: {job.display_name} - {e}")
+        finally:
+            # Windows: fitz 파일 핸들 해제 후 임시 폴더 삭제
+            gc.collect()
+            try:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception:
+                pass
 
         self._notify()
 

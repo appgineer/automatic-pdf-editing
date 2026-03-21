@@ -1,5 +1,6 @@
 """레벨 조정 (main.py의 apply_levels 재사용)"""
 
+import gc
 from pathlib import Path
 from PIL import Image
 import fitz
@@ -30,6 +31,7 @@ def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: 
         mat = fitz.Matrix(300 / 72, 300 / 72)
         pix = page.get_pixmap(matrix=mat)
         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        del pix
 
         # 레벨 조정
         img = apply_levels(img, black, white)
@@ -40,8 +42,12 @@ def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: 
 
         new_page = dst.new_page(width=page.rect.width, height=page.rect.height)
         new_page.insert_image(new_page.rect, pixmap=new_pix)
+        del new_pix, img, img_bytes
 
     dst.save(str(output_path))
     dst.close()
+    del dst
     src.close()
+    del src
+    gc.collect()
     return output_path

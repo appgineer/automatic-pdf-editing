@@ -1,5 +1,6 @@
 """PDF 분할"""
 
+import gc
 from pathlib import Path
 import fitz
 
@@ -11,6 +12,8 @@ def split_pdf_by_count(input_path: Path, max_pages: int, output_dir: Path, suffi
 
     if total <= max_pages:
         doc.close()
+        del doc
+        gc.collect()
         return [input_path]
 
     stem = input_path.stem
@@ -26,10 +29,13 @@ def split_pdf_by_count(input_path: Path, max_pages: int, output_dir: Path, suffi
         out_path = output_dir / out_name
         part_doc.save(str(out_path))
         part_doc.close()
+        del part_doc
         results.append(out_path)
         part += 1
 
     doc.close()
+    del doc
+    gc.collect()
     return results
 
 
@@ -55,9 +61,12 @@ def split_pdf_by_page_ranges(input_path: Path, ranges_str: str, output_dir: Path
         out_path = output_dir / out_name
         part_doc.save(str(out_path))
         part_doc.close()
+        del part_doc
         results.append(out_path)
 
     doc.close()
+    del doc
+    gc.collect()
     return results
 
 
@@ -77,4 +86,6 @@ def split_pdf_by_size(input_path: Path, max_size_mb: int, output_dir: Path) -> l
     pages_per_part = max(1, int(total * max_size_mb / file_size_mb))
 
     doc.close()
+    del doc
+    gc.collect()
     return split_pdf_by_count(input_path, pages_per_part, output_dir, suffix="_sz")

@@ -1,3 +1,122 @@
+# PDF 자동화 시스템
 
-test
-ee
+A컴퓨터에서 공유폴더로 PDF + config.json을 보내면, B컴퓨터에서 자동 처리하는 시스템.
+
+## 입출력 폴더 구조
+
+```
+입력폴더(GUI에서 선택)/
+  김민수/
+    쉽게쓴파이썬/
+      image1.pdf, image2.pdf, config.json
+
+출력폴더(GUI에서 선택)/
+  김민수 님.zip    ← 고객의 모든 책 완료 시 자동 압축
+```
+
+### config.json
+
+```json
+{
+  "type": "고급",
+  "black_point": 30,
+  "white_point": 220,
+  "ocr_language": "Korean",
+  "split_after_ocr": false,
+  "split_by_pages": "1-20,21-50",
+  "split_by_size": 200
+}
+```
+
+## 처리 파이프라인 (책 1권 단위)
+
+1. **PDF 합치기** - 여러 파일이면 하나로 병합
+2. **레벨 조정** - config type="고급"일 때만 적용
+3. **100페이지 분할** → `_s` 접미사
+4. **ABBYY OCR** (pyautogui GUI 자동화) → `_OCR` 접미사
+5. **OCR 결과 합치기**
+6. **최종 분할** (선택, config에 따라)
+7. **ZIP 압축** - 고객의 모든 책 완료 → `고객이름 님.zip` 생성
+
+## 프로젝트 구조
+
+```
+automatic-pdf-editing/
+├── run_automation.py           # 진입점
+├── settings.json               # 입출력 폴더 경로 (자동 생성)
+├── automation/
+│   ├── app.py                  # 앱 통합
+│   ├── config.py               # 설정 저장/불러오기
+│   ├── models.py               # Job, BookConfig, JobStatus
+│   ├── watcher.py              # 폴더 감시 (5초 폴링)
+│   ├── queue_manager.py        # 작업 큐
+│   ├── pipeline/
+│   │   ├── runner.py           # 파이프라인 실행
+│   │   ├── merge.py            # PDF 합치기
+│   │   ├── levels.py           # 레벨 조정
+│   │   ├── split.py            # PDF 분할
+│   │   ├── ocr.py              # ABBYY 자동화 (Phase 4)
+│   │   └── compress.py         # ZIP 압축
+│   └── gui/
+│       ├── main_window.py      # 메인 윈도우
+│       ├── job_tree.py         # 작업 목록 트리
+│       └── controls.py         # 버튼/폴더선택
+```
+
+## GUI 화면
+
+```
+┌──────────────────────────────────────────┐
+│ 입력폴더: [C:\input    ] [찾기]           │
+│ 출력폴더: [C:\output   ] [찾기]           │
+│                          [시작]  [중지]   │
+├──────────────────────────────────────────┤
+│ ▼ 김민수                                  │
+│   ● 쉽게쓴 파이썬    작업중               │
+│   ○ 영어교과서       대기중               │
+│ ▼ 박지영                                  │
+│   ○ 수학의정석       대기중               │
+│                      [▲위로] [▼아래로]    │
+├──────────────────────────────────────────┤
+│ 현재: 쉽게쓴 파이썬 - OCR 처리중          │
+└──────────────────────────────────────────┘
+```
+
+- 상태: ●작업중(초록) ○대기중(회색) ●완료(파랑)
+- 순서 변경: 대기중인 항목 클릭 후 위로/아래로
+- 새 폴더 감지 시 자동 추가
+
+## 핵심 설계
+
+### 스레드 구조 (3개)
+- **메인**: tkinter GUI
+- **감시**: 폴더 폴링 (5초 간격)
+- **작업**: 파이프라인 순차 실행
+
+### 파일 안정성 감지
+- PDF 크기를 폴링 간격(5초)마다 비교, 변화 없으면 전송 완료로 판단
+
+### 설정 저장
+- `settings.json`에 입력/출력 폴더 경로 저장
+- 프로그램 재시작 시 자동 불러오기
+
+## 의존성
+
+```
+pymupdf>=1.23.0
+Pillow>=10.0.0
+pyautogui>=0.9.54
+```
+
+## 실행
+
+```bash
+python run_automation.py
+```
+
+## 구현 상태
+
+- [x] Phase 1: PDF 처리 기반 (merge, levels, split, compress)
+- [x] Phase 2: 큐 & 감시 & 파이프라인
+- [x] Phase 3: GUI + 통합
+- [ ] Phase 4: ABBYY OCR 자동화 (B컴퓨터에서 개발)
