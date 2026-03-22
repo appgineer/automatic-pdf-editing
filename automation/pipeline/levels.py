@@ -1,7 +1,8 @@
 """레벨 조정"""
 
 import gc
-import io
+import os
+import tempfile
 from pathlib import Path
 from PIL import Image
 import fitz
@@ -23,47 +24,48 @@ def apply_levels(image: Image.Image, black: int, white: int) -> Image.Image:
 
 
 def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: int) -> Path:
-    """PDF 내 이미지를 직접 추출하여 레벨 조정 적용 (원본 해상도 유지)"""
-    doc = fitz.open(input_path)
+    """PDF 전체 페이지에 레벨 조정 적용 (600 DPI)"""
+    DPI = 600
+    scale = DPI / 72
+
+    src = fitz.open(input_path)
+    dst = fitz.open()
+    tmp_dir = tempfile.mkdtemp()
 
     try:
-        xrefs_done = set()
-        for page in doc:
-            for img_info in page.get_images():
-                xref = img_info[0]
-                if xref in xrefs_done:
-                    continue
-                xrefs_done.add(xref)
+        for page_idx in range(len(src)):
+            page = src[page_idx]
 
-                # 원본 이미지 추출
-                img_dict = doc.extract_image(xref)
-                pil_img = Image.open(io.BytesIO(img_dict["image"]))
+            # 페이지 → 600 DPI로 렌더링
+            pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale))
+            tmp_png = os.path.join(tmp_dir, f"_page_{page_idx}.png")
+            pix.save(tmp_png)
+            del pix
 
-                # CMYK → RGB 변환
-                if pil_img.mode == "CMYK":
-                    pil_img = pil_img.convert("RGB")
-                elif pil_img.mode not in ("RGB", "L"):
-                    pil_img = pil_img.convert("RGB")
+            # PIL로 열어서 레벨 조정 후 다시 저장
+            img = Image.open(tmp_png)
+            img = apply_levels(img, black, white)
+            img.save(tmp_png)
+            del img
 
-                # 레벨 조정
-                pil_img = apply_levels(pil_img, black, white)
+            # PDF 페이지에 삽입
+            new_page = dst.new_page(width=page.rect.width, height=page.rect.height)
+            new_page.insert_image(new_page.rect, filename=tmp_png)
 
-                # 원본 포맷으로 바이트 변환
-                buf = io.BytesIO()
-                ext = img_dict["ext"]
-                if ext in ("jpeg", "jpg"):
-                    pil_img.save(buf, format="JPEG", quality=95)
-                else:
-                    pil_img.save(buf, format="PNG")
+            os.remove(tmp_png)
 
-                # 이미지 교체
-                page.replace_image(xref, stream=buf.getvalue())
-                del pil_img, buf
-
-        doc.save(str(output_path))
+        dst.save(str(output_path))
     finally:
-        doc.close()
-        del doc
+        dst.close()
+        del dst
+        src.close()
+        del src
+        # 임시 폴더 정리
+        try:
+            os.rmdir(tmp_dir)
+        except OSError:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
         gc.collect()
 
     return output_path
