@@ -42,19 +42,21 @@ def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: 
             pix.save(tmp_png)
             del pix
 
-            # PIL로 열어서 레벨 조정 후 다시 저장
+            # PIL로 열어서 레벨 조정 후 JPEG 2000 무손실로 저장
             img = Image.open(tmp_png)
             img = apply_levels(img, black, white)
-            img.save(tmp_png)
+            os.remove(tmp_png)
+            tmp_jp2 = os.path.join(tmp_dir, f"_page_{page_idx}.jp2")
+            img.save(tmp_jp2, format='JPEG2000', irreversible=False)
             del img
 
             # PDF 페이지에 삽입
             new_page = dst.new_page(width=page.rect.width, height=page.rect.height)
-            new_page.insert_image(new_page.rect, filename=tmp_png)
+            new_page.insert_image(new_page.rect, filename=tmp_jp2)
 
-            os.remove(tmp_png)
+            os.remove(tmp_jp2)
 
-        dst.save(str(output_path))
+        dst.save(str(output_path), garbage=4, deflate=True)
     finally:
         dst.close()
         del dst
