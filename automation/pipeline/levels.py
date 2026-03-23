@@ -42,12 +42,13 @@ def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: 
             pix.save(tmp_png)
             del pix
 
-            # PIL로 열어서 레벨 조정 후 JPEG 2000 무손실로 저장
+            # PIL로 열어서 레벨 조정 후 JPEG 2000 고품질 손실 압축으로 저장
             img = Image.open(tmp_png)
             img = apply_levels(img, black, white)
             os.remove(tmp_png)
             tmp_jp2 = os.path.join(tmp_dir, f"_page_{page_idx}.jp2")
-            img.save(tmp_jp2, format='JPEG2000', irreversible=False)
+            img.save(tmp_jp2, format='JPEG2000', irreversible=True,
+                     quality_mode='dB', quality_layers=[50])
             del img
 
             # PDF 페이지에 삽입
