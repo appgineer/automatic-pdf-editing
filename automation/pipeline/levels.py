@@ -48,7 +48,7 @@ def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: 
             os.remove(tmp_png)
             tmp_jp2 = os.path.join(tmp_dir, f"_page_{page_idx}.jp2")
             img.save(tmp_jp2, format='JPEG2000', irreversible=True,
-                     quality_mode='dB', quality_layers=[40])
+                     quality_mode='dB', quality_layers=[20])
             del img
 
             # PDF 페이지에 삽입
