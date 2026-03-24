@@ -1,7 +1,7 @@
 {
   "type": "고급",
-  "black_point": 30,
-  "white_point": 220,
+  "black_point": 10,
+  "white_point": 190,
   "ocr_language": "Korean",
   "split_after_ocr": false,
   "split_by_pages": "",

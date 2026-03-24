@@ -3,7 +3,9 @@
     "allow": [
       "WebSearch",
       "WebFetch(domain:pymupdf.readthedocs.io)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(grep -r \"window\\\\|pyautogui\\\\|click\\\\|keyboard\\\\|locate\" /Users/mpc/my-git/automatic-pdf-editing --include=*.py)",
+      "Bash(xargs cat:*)"
     ]
   }
 }
