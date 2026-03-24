@@ -43,14 +43,15 @@ def _process_page(args):
     # PIL로 열어서 레벨 조정 후 JPEG 2000 고품질 손실 압축으로 저장
     img = Image.open(tmp_png)
     img = apply_levels(img, black, white)
+    img_width, img_height = img.size
     os.remove(tmp_png)
     tmp_jp2 = os.path.join(tmp_dir, f"_page_{page_idx}.jp2")
     img.save(tmp_jp2, format='JPEG2000', irreversible=True,
-            # quality_layers = 퀄리티 (올라갈수록 용량 올라가고 선명함) 
+            # quality_layers = 퀄리티 (올라갈수록 용량 올라가고 선명함)
              quality_mode='dB', quality_layers=[38])
     del img
 
-    return (page_idx, tmp_jp2, page_width, page_height)
+    return (page_idx, tmp_jp2, page_width, page_height, img_width, img_height)
 
 
 def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: int) -> Path:
@@ -78,11 +79,20 @@ def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: 
         # 페이지 순서대로 정렬
         results.sort(key=lambda x: x[0])
 
-        # PDF 조립 (메인 프로세스에서 순차 수행)
+        # PDF 조립 — JP2 스트림을 직접 삽입 (재압축 방지)
         dst = fitz.open()
-        for page_idx, jp2_path, page_width, page_height in results:
+        for page_idx, jp2_path, page_width, page_height, img_width, img_height in results:
             new_page = dst.new_page(width=page_width, height=page_height)
-            new_page.insert_image(new_page.rect, filename=jp2_path)
+
+            with open(jp2_path, 'rb') as f:
+                jp2_data = f.read()
+
+            xref = dst.insert_image(
+                new_page.rect,
+                stream=jp2_data,
+                width=img_width,
+                height=img_height,
+            )
             os.remove(jp2_path)
 
         dst.save(str(output_path), garbage=4, deflate=True)
