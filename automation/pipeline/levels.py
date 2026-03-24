@@ -87,11 +87,9 @@ def apply_levels_to_pdf(input_path: Path, output_path: Path, black: int, white: 
             with open(jp2_path, 'rb') as f:
                 jp2_data = f.read()
 
-            xref = dst.insert_image(
+            new_page.insert_image(
                 new_page.rect,
                 stream=jp2_data,
-                width=img_width,
-                height=img_height,
             )
             os.remove(jp2_path)
 
