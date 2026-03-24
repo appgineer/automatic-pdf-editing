@@ -47,7 +47,7 @@ def _process_page(args):
     tmp_jp2 = os.path.join(tmp_dir, f"_page_{page_idx}.jp2")
     img.save(tmp_jp2, format='JPEG2000', irreversible=True,
             # quality_layers = 퀄리티 (올라갈수록 용량 올라가고 선명함) 
-             quality_mode='dB', quality_layers=[35])
+             quality_mode='dB', quality_layers=[38])
     del img
 
     return (page_idx, tmp_jp2, page_width, page_height)
