@@ -32,7 +32,6 @@ ABBYY_WINDOW_KEYWORD = "FineReader"
 POLL_INTERVAL = 0.5
 # 최대 대기 시간 (초)
 DEFAULT_TIMEOUT = 60
-LONG_TIMEOUT = 300  # OCR 처리 등 오래 걸리는 작업
 
 
 # ── 창 감지 유틸리티 ──────────────────────────────────────────
@@ -213,36 +212,9 @@ def _set_language(languages: list[str]):
 
 
 def _wait_for_ocr_complete():
-    """OCR 편집기에서 자동 OCR 처리 완료 대기 (창 제목 변화 감지)
-
-    ABBYY는 OCR 처리중 진행 대화상자를 표시함.
-    해당 대화상자가 사라지면 완료로 판단.
-    """
-    logger.info("OCR 처리 완료 대기중...")
-
-    # OCR 진행 대화상자/상태가 나타나는지 잠시 대기
+    """OCR 편집기 로딩 후 잠시 대기"""
+    logger.info("OCR 편집기 안정화 대기 (2초)")
     time.sleep(2)
-
-    # "인식" 또는 "Recogni" 키워드가 포함된 창(진행 대화상자)이 사라질 때까지 대기
-    # ABBYY는 처리중 "인식 중..." / "Recognizing..." 등의 대화상자를 표시
-    ocr_keywords = ["인식", "Recogni", "Progress", "진행", "처리"]
-
-    # 먼저 진행 대화상자가 있는지 확인
-    found_progress = False
-    for kw in ocr_keywords:
-        if _find_window(kw):
-            found_progress = True
-            logger.info(f"OCR 진행 대화상자 발견 ('{kw}')")
-            # 해당 대화상자가 닫힐 때까지 대기
-            _wait_for_window_gone(kw, timeout=LONG_TIMEOUT)
-            break
-
-    if not found_progress:
-        # 진행 대화상자를 못 찾으면 짧게 대기 후 진행
-        logger.info("OCR 진행 대화상자 미발견 — 3초 대기 후 진행")
-        time.sleep(3)
-
-    logger.info("OCR 처리 완료")
 
 
 def _save_as_searchable_pdf(output_path: Path):
