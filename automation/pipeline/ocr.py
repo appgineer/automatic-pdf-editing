@@ -100,6 +100,41 @@ def _set_language(languages: list[str]):
     time.sleep(0.5)
 
 
+def _wait_for_file_complete(file_path: Path, timeout: int = 600):
+    """파일이 생성되고 크기가 안정될 때까지 대기 (OCR 완료 감지)
+
+    파일 크기가 3초간 변하지 않으면 완료로 판단.
+    최대 10분 대기.
+    """
+    start = time.time()
+
+    # 1. 파일이 생성될 때까지 대기
+    while time.time() - start < timeout:
+        if file_path.exists() and file_path.stat().st_size > 0:
+            break
+        time.sleep(1)
+    else:
+        logger.warning(f"파일 생성 타임아웃: {file_path}")
+        return
+
+    # 2. 파일 크기가 안정될 때까지 대기 (3초간 변화 없으면 완료)
+    prev_size = -1
+    stable_count = 0
+    while time.time() - start < timeout:
+        current_size = file_path.stat().st_size
+        if current_size == prev_size:
+            stable_count += 1
+            if stable_count >= 3:
+                logger.info(f"OCR 저장 완료 ({time.time() - start:.0f}초, {current_size / 1024:.0f}KB)")
+                return
+        else:
+            stable_count = 0
+        prev_size = current_size
+        time.sleep(1)
+
+    logger.warning(f"파일 안정화 타임아웃: {file_path}")
+
+
 def _save_as_searchable_pdf(output_path: Path):
     """F10 → Enter → F → V → S → 다른이름으로 저장 → Alt+D로 경로 입력
 
@@ -131,9 +166,12 @@ def _save_as_searchable_pdf(output_path: Path):
     pyautogui.hotkey("ctrl", "v")
     time.sleep(0.3)
 
-    # 저장
+    # 저장 (OCR 처리 + 저장이 동시에 진행됨)
     pyautogui.press("enter")
-    time.sleep(3)
+
+    # OCR + 저장 완료 대기: 파일이 생성되고 크기가 안정될 때까지
+    logger.info("OCR 처리 + 저장 대기중...")
+    _wait_for_file_complete(output_path)
 
     logger.info(f"저장 완료: {output_path}")
 
