@@ -87,14 +87,15 @@ class PipelineRunner:
         pdf_files = job.get_pdf_files()
         config = job.config
 
-        # 1. PDF 합치기
-        job.current_step = "PDF 합치기"
-        self._notify()
-        merged_path = tmp / f"{job.book_name}_merged.pdf"
-        merge_pdfs(pdf_files, merged_path)
-        current_pdf = merged_path
+        # --- 임시 비활성화: 합치기, 레벨, 분할 ---
+        # # 1. PDF 합치기
+        # job.current_step = "PDF 합치기"
+        # self._notify()
+        # merged_path = tmp / f"{job.book_name}_merged.pdf"
+        # merge_pdfs(pdf_files, merged_path)
+        # current_pdf = merged_path
 
-        # 2. 레벨 조정 (고급일 때만) — 임시 비활성화
+        # # 2. 레벨 조정 (고급일 때만)
         # if config.scan_type == "고급":
         #     job.current_step = "레벨 조정"
         #     self._notify()
@@ -102,50 +103,40 @@ class PipelineRunner:
         #     apply_levels_to_pdf(current_pdf, leveled_path, config.black_point, config.white_point)
         #     current_pdf = leveled_path
 
-        # 3~5. OCR (config에서 ocr=true일 때만)
-        if config.ocr:
-            job.current_step = "OCR용 분할"
-            self._notify()
-            split_parts = split_pdf_by_count(current_pdf, OCR_SPLIT_PAGES, tmp, suffix="_s")
-
-            job.current_step = "OCR 처리중"
-            self._notify()
-            ocr_results = []
-            for part in split_parts:
-                ocr_out = tmp / f"{part.stem}_OCR.pdf"
-                run_ocr(part, ocr_out, config.ocr_language)
-                ocr_results.append(ocr_out)
-
-            if len(ocr_results) > 1:
-                job.current_step = "OCR 결과 합치기"
-                self._notify()
-                final_merged = tmp / f"{job.book_name}_OCR.pdf"
-                merge_pdfs(ocr_results, final_merged)
-                current_pdf = final_merged
-            else:
-                current_pdf = ocr_results[0]
-
-        # 6. 최종 분할 (config에 따라)
+        # --- OCR만 실행: 입력 폴더의 원본 PDF → 출력 폴더 ---
         output_dir = self._get_output_dir(job)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        final_files = []
-
-        if config.is_split and config.split_method == "page" and config.split_page_ranges:
-            job.current_step = "페이지 범위 분할"
+        if config.ocr:
+            job.current_step = "OCR 처리중"
             self._notify()
-            final_files = split_pdf_by_page_ranges(current_pdf, config.split_page_ranges, output_dir)
-        elif config.is_split and config.split_method == "size" and config.split_size_mb > 0:
-            job.current_step = "크기 기준 분할"
-            self._notify()
-            final_files = split_pdf_by_size(current_pdf, config.split_size_mb, output_dir)
+            for pdf_file in pdf_files:
+                ocr_out = output_dir / pdf_file.name
+                run_ocr(pdf_file, ocr_out, config.ocr_language)
         else:
-            # 분할 없이 최종 파일 복사
-            final_path = output_dir / f"{job.book_name}.pdf"
-            shutil.copy2(current_pdf, final_path)
-            final_files = [final_path]
+            # OCR 안 함: 원본 그대로 출력 폴더에 복사
+            for pdf_file in pdf_files:
+                shutil.copy2(pdf_file, output_dir / pdf_file.name)
+
+        # --- 임시 비활성화: 최종 분할 ---
+        # final_files = []
+        #
+        # if config.is_split and config.split_method == "page" and config.split_page_ranges:
+        #     job.current_step = "페이지 범위 분할"
+        #     self._notify()
+        #     final_files = split_pdf_by_page_ranges(current_pdf, config.split_page_ranges, output_dir)
+        # elif config.is_split and config.split_method == "size" and config.split_size_mb > 0:
+        #     job.current_step = "크기 기준 분할"
+        #     self._notify()
+        #     final_files = split_pdf_by_size(current_pdf, config.split_size_mb, output_dir)
+        # else:
+        #     # 분할 없이 최종 파일 복사
+        #     final_path = output_dir / f"{job.book_name}.pdf"
+        #     shutil.copy2(current_pdf, final_path)
+        #     final_files = [final_path]
 
         # 분할된 파일이 tmp에 있으면 output으로 이동
+        final_files = []
         for f in final_files:
             if str(f).startswith(str(tmp)):
                 dest = output_dir / f.name
