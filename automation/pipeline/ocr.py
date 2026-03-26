@@ -6,8 +6,8 @@ Windows 11 + ABBYY FineReader 16 Standard
 흐름:
 1. 해당 폴더에서 PDF 파일을 직접 열기 (ABBYY OCR 편집기로 열림)
 2. Ctrl+. → OCR 언어 설정
-3. F10 → Tab*10 → Enter → 다른 이름으로 저장
-4. 출력폴더/사람이름/책이름/파일명_OCR.pdf 로 저장
+3. F10 → Enter → F → V → S → 다른 이름으로 저장
+4. Alt+D로 출력폴더/사람이름/책이름/ 경로 입력 → 파일명_OCR.pdf 저장
 """
 
 import os
@@ -101,7 +101,7 @@ def _set_language(languages: list[str]):
 
 
 def _save_as_searchable_pdf(output_path: Path):
-    """F10 → Tab*10 → Enter → 경로 입력 → 저장
+    """F10 → Enter → F → V → S → 다른이름으로 저장 → Alt+D로 경로 입력
 
     Args:
         output_path: 전체 저장 경로 (출력폴더/사람이름/책이름/파일명_OCR.pdf)
@@ -111,21 +111,29 @@ def _save_as_searchable_pdf(output_path: Path):
     # 출력 폴더 생성
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # F10 → 메뉴 열기
+    # F10 → Enter → F → V → S → 다른 이름으로 저장 창 열기
     pyautogui.press("f10")
     time.sleep(0.5)
+    pyautogui.press("enter")
+    time.sleep(0.3)
+    pyautogui.press("f")
+    time.sleep(0.3)
+    pyautogui.press("v")
+    time.sleep(0.3)
+    pyautogui.press("s")
+    time.sleep(1)
 
-    # Tab 10번 → "다른 이름으로 저장" 까지 이동
-    for _ in range(10):
-        pyautogui.press("tab")
-        time.sleep(0.1)
-
-    # Enter → 저장 대화상자 열기
+    # Alt+D → 주소 표시줄에 포커스 → 폴더 경로 입력
+    pyautogui.hotkey("alt", "d")
+    time.sleep(0.3)
+    pyperclip.copy(str(output_path.parent))
+    pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(1)
 
-    # 저장 경로 입력 (전체 경로)
-    pyperclip.copy(str(output_path))
+    # 파일명 입력란에 파일명_OCR.pdf 입력
+    pyperclip.copy(output_path.name)
     pyautogui.hotkey("ctrl", "a")
     time.sleep(0.2)
     pyautogui.hotkey("ctrl", "v")
