@@ -46,9 +46,9 @@ def _find_abbyy_window():
                     time.sleep(0.5)
                 win.activate()
                 time.sleep(0.5)
-                # 창 클릭으로 포커스 확실히 잡기
+                # 제목 표시줄 클릭으로 포커스 잡기 (콘텐츠 영역 클릭 금지)
                 try:
-                    pyautogui.click(win.left + win.width // 2, win.top + win.height // 2)
+                    pyautogui.click(win.left + win.width // 2, win.top + 15)
                     time.sleep(0.3)
                 except Exception:
                     pass
@@ -77,6 +77,25 @@ def _launch_abbyy():
     raise RuntimeError("ABBYY FineReader를 실행할 수 없습니다")
 
 
+def _find_file_dialog():
+    """파일 선택 대화상자를 찾아서 활성화"""
+    try:
+        import pygetwindow as gw
+        # 파일 대화상자 제목 키워드들
+        keywords = ["파일 선택", "열기", "open", "선택"]
+        for win in gw.getAllWindows():
+            title = win.title.lower()
+            for kw in keywords:
+                if kw.lower() in title:
+                    logger.info(f"파일 대화상자 발견: '{win.title}'")
+                    win.activate()
+                    time.sleep(0.3)
+                    return True
+    except Exception as e:
+        logger.warning(f"파일 대화상자 찾기 실패: {e}")
+    return False
+
+
 def _open_in_ocr_editor(pdf_path: Path):
     """Ctrl+R → OCR 편집기 열기 → 파일 선택
 
@@ -90,15 +109,24 @@ def _open_in_ocr_editor(pdf_path: Path):
     _find_abbyy_window()
     time.sleep(0.5)
     pyautogui.hotkey("ctrl", "r")
-    time.sleep(2)  # 파일 대화상자 뜰 때까지 대기
 
-    # 파일 이름 입력란에 전체 경로 붙여넣기
-    # Alt+N으로 파일 이름 입력란으로 포커스 이동 (윈도우 파일 대화상자 표준)
-    pyautogui.hotkey("alt", "n")
+    # 파일 대화상자가 뜰 때까지 대기 (최대 5초)
+    for i in range(10):
+        time.sleep(0.5)
+        if _find_file_dialog():
+            break
+    else:
+        logger.warning("파일 대화상자를 찾지 못함, 그래도 진행")
+
+    time.sleep(0.5)
+
+    # 파일 이름 입력란: 전체 경로를 주소창에 직접 입력
+    # Ctrl+L 또는 Alt+D로 주소창 포커스 → 폴더 경로 입력 → Enter
+    # 그 후 파일 이름 입력란에 파일명 입력
+    # 가장 간단한 방법: 파일 이름 입력란에 전체 경로를 바로 붙여넣기
+    pyautogui.hotkey("alt", "n")  # 파일 이름(N): 입력란 포커스
     time.sleep(0.3)
-
-    # 기존 텍스트 지우고 전체 경로 붙여넣기
-    pyautogui.hotkey("ctrl", "a")
+    pyautogui.hotkey("ctrl", "a")  # 기존 텍스트 전체 선택
     time.sleep(0.1)
     pyperclip.copy(str(pdf_path))
     pyautogui.hotkey("ctrl", "v")
