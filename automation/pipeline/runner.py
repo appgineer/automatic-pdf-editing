@@ -111,8 +111,8 @@ class PipelineRunner:
             job.current_step = "OCR 처리중"
             self._notify()
             for pdf_file in pdf_files:
-                ocr_out = output_dir / f"{pdf_file.stem}_ocr.pdf"
-                run_ocr(pdf_file, ocr_out, config.ocr_language)
+                run_ocr(pdf_file, pdf_file, config.ocr_language)
+                # _OCR.pdf 파일은 원본과 같은 폴더에 자동 생성됨
         else:
             # OCR 안 함: 원본 그대로 출력 폴더에 복사
             for pdf_file in pdf_files:
