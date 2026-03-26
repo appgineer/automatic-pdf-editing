@@ -176,15 +176,15 @@ def _save_as_searchable_pdf(output_path: Path):
     logger.info(f"저장 완료: {output_path}")
 
 
-def _close_document():
-    """현재 문서 닫기"""
-    pyautogui.hotkey("ctrl", "w")
-    time.sleep(0.5)
-
-    # 저장 여부 묻는 대화상자 → 저장 안 함
-    pyautogui.press("tab")
-    pyautogui.press("enter")
-    time.sleep(0.5)
+def _close_abbyy():
+    """ABBYY 프로세스 모두 종료"""
+    import subprocess
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", "FineReader.exe"], capture_output=True)
+        logger.info("ABBYY 프로세스 종료 완료")
+        time.sleep(1)
+    except Exception as e:
+        logger.warning(f"ABBYY 종료 실패: {e}")
 
 
 def run_ocr(input_path: Path, output_path: Path, languages: list[str] | str = "Korean") -> Path:
@@ -212,8 +212,8 @@ def run_ocr(input_path: Path, output_path: Path, languages: list[str] | str = "K
     # 3. 다른 이름으로 저장 (출력폴더/사람이름/책이름/파일명_OCR.pdf)
     _save_as_searchable_pdf(output_path)
 
-    # 4. 문서 닫기
-    _close_document()
+    # 4. ABBYY 종료
+    _close_abbyy()
 
     logger.info(f"OCR 완료: {output_path.name}")
     return output_path
