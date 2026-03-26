@@ -123,17 +123,9 @@ def _save_as_searchable_pdf(output_path: Path):
     pyautogui.press("s")
     time.sleep(1)
 
-    # Alt+D → 주소 표시줄에 포커스 → 폴더 경로 입력
-    pyautogui.hotkey("alt", "d")
-    time.sleep(0.3)
-    pyperclip.copy(str(output_path.parent))
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.3)
-    pyautogui.press("enter")
-    time.sleep(1)
-
-    # 파일명 입력란에 파일명_OCR.pdf 입력
-    pyperclip.copy(output_path.name)
+    # 파일명 입력란에 전체 경로를 직접 입력
+    # (Windows 저장 대화상자는 전체 경로를 넣으면 해당 폴더에 저장됨)
+    pyperclip.copy(str(output_path))
     pyautogui.hotkey("ctrl", "a")
     time.sleep(0.2)
     pyautogui.hotkey("ctrl", "v")
