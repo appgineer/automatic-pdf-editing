@@ -16,26 +16,40 @@ class JobStatus(Enum):
 
 @dataclass
 class BookConfig:
-    type: str = "일반"
+    scan_type: str = "일반"
     black_point: int = 0
     white_point: int = 255
-    ocr_language: str = "Korean"
-    split_after_ocr: bool = False
-    split_by_pages: str = ""
-    split_by_size: int = 0
+    ocr: bool = True
+    ocr_language: list = None
+    is_split: bool = False
+    split_method: str = ""  # "page" 또는 "size"
+    split_page_ranges: str = ""
+    split_size_mb: int = 0
+
+    def __post_init__(self):
+        if self.ocr_language is None:
+            self.ocr_language = ["한국어"]
 
     @classmethod
     def from_file(cls, path: Path) -> "BookConfig":
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+
+        # 언어: 문자열이면 리스트로 변환
+        lang = data.get("ocr_language", ["한국어"])
+        if isinstance(lang, str):
+            lang = [lang]
+
         return cls(
-            type=data.get("type", "일반"),
+            scan_type=data.get("scan_type", data.get("type", "일반")),
             black_point=data.get("black_point", 0),
             white_point=data.get("white_point", 255),
-            ocr_language=data.get("ocr_language", "Korean"),
-            split_after_ocr=data.get("split_after_ocr", False),
-            split_by_pages=data.get("split_by_pages", ""),
-            split_by_size=data.get("split_by_size", 0),
+            ocr=data.get("ocr", True),
+            ocr_language=lang,
+            is_split=data.get("is_split", data.get("split_after_ocr", False)),
+            split_method=data.get("split_method", ""),
+            split_page_ranges=data.get("split_page_ranges", data.get("split_by_pages", "")),
+            split_size_mb=data.get("split_size_mb", data.get("split_by_size", 0)),
         )
 
 

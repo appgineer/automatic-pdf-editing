@@ -1,9 +1,11 @@
 {
-  "type": "고급",
-  "black_point": 10,
-  "white_point": 190,
-  "ocr_language": "Korean",
-  "split_after_ocr": false,
-  "split_by_pages": "",
-  "split_by_size": 0
+  "scan_type": "일반",
+  "black_point": 30,
+  "white_point": 200,
+  "ocr": true,
+  "ocr_language": ["한국어", "영어"],
+  "is_split": false,
+  "split_method": "",
+  "split_page_ranges": "",
+  "split_size_mb": 0
 }

@@ -94,37 +94,36 @@ class PipelineRunner:
         merge_pdfs(pdf_files, merged_path)
         current_pdf = merged_path
 
-        # 2. 레벨 조정 (고급일 때만)
-        if config.type == "고급":
-            job.current_step = "레벨 조정"
+        # 2. 레벨 조정 (고급일 때만) — 임시 비활성화
+        # if config.scan_type == "고급":
+        #     job.current_step = "레벨 조정"
+        #     self._notify()
+        #     leveled_path = tmp / f"{job.book_name}_leveled.pdf"
+        #     apply_levels_to_pdf(current_pdf, leveled_path, config.black_point, config.white_point)
+        #     current_pdf = leveled_path
+
+        # 3~5. OCR (config에서 ocr=true일 때만)
+        if config.ocr:
+            job.current_step = "OCR용 분할"
             self._notify()
-            leveled_path = tmp / f"{job.book_name}_leveled.pdf"
-            apply_levels_to_pdf(current_pdf, leveled_path, config.black_point, config.white_point)
-            current_pdf = leveled_path
+            split_parts = split_pdf_by_count(current_pdf, OCR_SPLIT_PAGES, tmp, suffix="_s")
 
-        # 3. 100페이지 분할 (OCR용)
-        job.current_step = "OCR용 분할"
-        self._notify()
-        split_parts = split_pdf_by_count(current_pdf, OCR_SPLIT_PAGES, tmp, suffix="_s")
-
-        # 4. ABBYY OCR
-        job.current_step = "OCR 처리중"
-        self._notify()
-        ocr_results = []
-        for part in split_parts:
-            ocr_out = tmp / f"{part.stem}_OCR.pdf"
-            run_ocr(part, ocr_out, config.ocr_language)
-            ocr_results.append(ocr_out)
-
-        # 5. OCR 결과 합치기
-        if len(ocr_results) > 1:
-            job.current_step = "OCR 결과 합치기"
+            job.current_step = "OCR 처리중"
             self._notify()
-            final_merged = tmp / f"{job.book_name}_OCR.pdf"
-            merge_pdfs(ocr_results, final_merged)
-            current_pdf = final_merged
-        else:
-            current_pdf = ocr_results[0]
+            ocr_results = []
+            for part in split_parts:
+                ocr_out = tmp / f"{part.stem}_OCR.pdf"
+                run_ocr(part, ocr_out, config.ocr_language)
+                ocr_results.append(ocr_out)
+
+            if len(ocr_results) > 1:
+                job.current_step = "OCR 결과 합치기"
+                self._notify()
+                final_merged = tmp / f"{job.book_name}_OCR.pdf"
+                merge_pdfs(ocr_results, final_merged)
+                current_pdf = final_merged
+            else:
+                current_pdf = ocr_results[0]
 
         # 6. 최종 분할 (config에 따라)
         output_dir = self._get_output_dir(job)
@@ -132,14 +131,14 @@ class PipelineRunner:
 
         final_files = []
 
-        if config.split_after_ocr and config.split_by_pages:
+        if config.is_split and config.split_method == "page" and config.split_page_ranges:
             job.current_step = "페이지 범위 분할"
             self._notify()
-            final_files = split_pdf_by_page_ranges(current_pdf, config.split_by_pages, output_dir)
-        elif config.split_after_ocr and config.split_by_size > 0:
+            final_files = split_pdf_by_page_ranges(current_pdf, config.split_page_ranges, output_dir)
+        elif config.is_split and config.split_method == "size" and config.split_size_mb > 0:
             job.current_step = "크기 기준 분할"
             self._notify()
-            final_files = split_pdf_by_size(current_pdf, config.split_by_size, output_dir)
+            final_files = split_pdf_by_size(current_pdf, config.split_size_mb, output_dir)
         else:
             # 분할 없이 최종 파일 복사
             final_path = output_dir / f"{job.book_name}.pdf"

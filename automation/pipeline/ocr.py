@@ -1,23 +1,194 @@
-"""ABBYY FineReader OCR 자동화 (pyautogui)
+"""ABBYY FineReader 16 OCR 자동화 (pyautogui)
 
-Phase 4에서 B컴퓨터에서 구현 예정.
-현재는 스텁으로 입력 파일을 그대로 반환.
+Windows 11 + ABBYY FineReader 16 Standard
+단축키 기반으로 OCR 편집기를 통해 PDF를 검색 가능한 PDF로 변환.
+
+흐름:
+1. ABBYY FineReader 16 실행
+2. Ctrl+R → OCR 편집기 열기 (파일 선택 포함)
+3. Ctrl+. → OCR 언어 설정 (Tab*3 → 언어 입력 → Enter)
+4. Alt+F → A → S → 검색 가능한 PDF로 저장
 """
 
+import time
+import subprocess
+import logging
 from pathlib import Path
 
+import pyautogui
+import pyperclip
 
-def run_ocr(input_path: Path, output_path: Path, language: str = "Korean") -> Path:
-    """ABBYY OCR 실행 (스텁 - Phase 4에서 구현)"""
-    # TODO: pyautogui를 사용한 ABBYY FineReader 자동화
+logger = logging.getLogger(__name__)
+
+pyautogui.FAILSAFE = True
+pyautogui.PAUSE = 0.3
+
+ABBYY_PATH = r"C:\Program Files\ABBYY FineReader 16\FineReader.exe"
+
+WAIT_LAUNCH = 5
+WAIT_FILE_OPEN = 5
+WAIT_OCR_PER_PAGE = 3
+WAIT_SAVE = 5
+
+
+def _find_abbyy_window():
+    """ABBYY FineReader 창을 찾아서 활성화"""
+    try:
+        import pygetwindow as gw
+        windows = gw.getWindowsWithTitle("ABBYY FineReader")
+        if windows:
+            win = windows[0]
+            if win.isMinimized:
+                win.restore()
+            win.activate()
+            time.sleep(0.5)
+            return True
+    except Exception as e:
+        logger.warning(f"창 찾기 실패: {e}")
+    return False
+
+
+def _launch_abbyy():
+    """ABBYY FineReader 16 실행"""
+    if _find_abbyy_window():
+        logger.info("ABBYY가 이미 실행 중")
+        return
+
+    logger.info(f"ABBYY 실행: {ABBYY_PATH}")
+    subprocess.Popen(ABBYY_PATH)
+    time.sleep(WAIT_LAUNCH)
+
+    if not _find_abbyy_window():
+        raise RuntimeError("ABBYY FineReader를 실행할 수 없습니다")
+
+
+def _open_in_ocr_editor(pdf_path: Path):
+    """Ctrl+R → OCR 편집기 열기 → 파일 선택"""
+    logger.info(f"OCR 편집기로 열기: {pdf_path}")
+    pyautogui.hotkey("ctrl", "r")
+    time.sleep(1)
+
+    # 파일 선택 대화상자에서 경로 입력
+    pyperclip.copy(str(pdf_path))
+    pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.5)
+    pyautogui.press("enter")
+    time.sleep(WAIT_FILE_OPEN)
+
+
+def _set_language(languages: list[str]):
+    """Ctrl+. → OCR 언어 설정
+
+    Tab 3번 → 언어 입력창 → 언어 하나씩 입력+Enter → 마지막 Enter로 확인
+    """
+    logger.info(f"언어 설정: {languages}")
+    pyautogui.hotkey("ctrl", ".")
+    time.sleep(0.5)
+
+    # Tab 3번으로 언어 입력창 이동
+    for _ in range(3):
+        pyautogui.press("tab")
+        time.sleep(0.1)
+
+    # 언어 하나씩 입력 후 Enter
+    for lang in languages:
+        pyperclip.copy(lang)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.3)
+        pyautogui.press("enter")
+        time.sleep(0.3)
+
+    # 마지막 Enter → 확인 버튼
+    pyautogui.press("enter")
+    time.sleep(0.5)
+
+
+def _save_as_searchable_pdf(output_path: Path):
+    """Alt+F → A → S → 검색 가능한 PDF로 저장"""
+    logger.info(f"검색 가능한 PDF로 저장: {output_path}")
+
+    # 출력 폴더가 없으면 생성
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    pyautogui.hotkey("alt", "f")
+    time.sleep(0.3)
+    pyautogui.press("a")
+    time.sleep(0.3)
+    pyautogui.press("s")
+    time.sleep(1)
+
+    # 저장 대화상자에서 경로 입력
+    pyperclip.copy(str(output_path))
+    pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.5)
+    pyautogui.press("enter")
+    time.sleep(WAIT_SAVE)
+
+
+def _wait_for_ocr_complete(page_count: int = 10):
+    """OCR 편집기에서 파일을 열면 자동으로 OCR이 진행됨. 완료 대기."""
+    estimated_time = max(WAIT_OCR_PER_PAGE * page_count, 10)
+    logger.info(f"OCR 처리 대기 ({estimated_time}초)")
+    time.sleep(estimated_time)
+
+
+def _close_document():
+    """현재 문서 닫기"""
+    pyautogui.hotkey("ctrl", "w")
+    time.sleep(0.5)
+
+    # 저장 여부 묻는 대화상자 → 저장 안 함
+    pyautogui.press("tab")
+    pyautogui.press("enter")
+    time.sleep(0.5)
+
+
+def _get_page_count(pdf_path: Path) -> int:
+    """PDF 페이지 수 확인"""
+    try:
+        import fitz
+        doc = fitz.open(str(pdf_path))
+        count = doc.page_count
+        doc.close()
+        return count
+    except Exception:
+        return 10
+
+
+def run_ocr(input_path: Path, output_path: Path, languages: list[str] | str = "Korean") -> Path:
+    """ABBYY FineReader 16으로 OCR 실행
+
+    Args:
+        input_path: 입력 PDF 경로
+        output_path: 출력 PDF 경로 (검색 가능한 PDF)
+        languages: OCR 언어 목록 (예: ["한국어", "영어"])
+
+    Returns:
+        출력 PDF 경로
+    """
+    if isinstance(languages, str):
+        languages = [languages]
+
+    page_count = _get_page_count(input_path)
+    logger.info(f"OCR 시작: {input_path.name} ({page_count}페이지, 언어: {languages})")
+
     # 1. ABBYY 실행/활성화
-    # 2. 파일 열기
-    # 3. OCR 언어 설정
-    # 4. OCR 실행
-    # 5. PDF로 저장
-    # 6. 완료 대기
+    _launch_abbyy()
 
-    import shutil
-    if input_path != output_path:
-        shutil.copy2(input_path, output_path)
+    # 2. Ctrl+R → OCR 편집기로 파일 열기
+    _open_in_ocr_editor(input_path)
+
+    # 3. Ctrl+. → 언어 설정
+    _set_language(languages)
+
+    # 4. OCR 완료 대기 (편집기가 자동으로 처리)
+    _wait_for_ocr_complete(page_count)
+
+    # 5. Alt+F → A → S → 검색 가능한 PDF로 저장
+    _save_as_searchable_pdf(output_path)
+
+    # 6. 문서 닫기
+    _close_document()
+
+    logger.info(f"OCR 완료: {output_path.name}")
     return output_path
