@@ -25,24 +25,34 @@ pyautogui.PAUSE = 0.3
 
 ABBYY_PATH = r"C:\Program Files\ABBYY FineReader 16\FineReader.exe"
 
-WAIT_LAUNCH = 5
+WAIT_LAUNCH = 10  # ABBYY 실행 대기 (초기 로딩이 느림)
 WAIT_FILE_OPEN = 5
 WAIT_OCR_PER_PAGE = 3
 WAIT_SAVE = 5
 
+# ABBYY 창 제목에 포함될 키워드 (부분 일치)
+ABBYY_WINDOW_KEYWORD = "FineReader"
+
 
 def _find_abbyy_window():
-    """ABBYY FineReader 창을 찾아서 활성화"""
+    """ABBYY FineReader 창을 찾아서 활성화 (부분 일치)"""
     try:
         import pygetwindow as gw
-        windows = gw.getWindowsWithTitle("ABBYY FineReader")
-        if windows:
-            win = windows[0]
-            if win.isMinimized:
-                win.restore()
-            win.activate()
-            time.sleep(0.5)
-            return True
+        for win in gw.getAllWindows():
+            if ABBYY_WINDOW_KEYWORD.lower() in win.title.lower():
+                logger.info(f"ABBYY 창 발견: '{win.title}'")
+                if win.isMinimized:
+                    win.restore()
+                    time.sleep(0.5)
+                win.activate()
+                time.sleep(0.5)
+                # 창 클릭으로 포커스 확실히 잡기
+                try:
+                    pyautogui.click(win.left + win.width // 2, win.top + win.height // 2)
+                    time.sleep(0.3)
+                except Exception:
+                    pass
+                return True
     except Exception as e:
         logger.warning(f"창 찾기 실패: {e}")
     return False
@@ -56,22 +66,45 @@ def _launch_abbyy():
 
     logger.info(f"ABBYY 실행: {ABBYY_PATH}")
     subprocess.Popen(ABBYY_PATH)
-    time.sleep(WAIT_LAUNCH)
 
-    if not _find_abbyy_window():
-        raise RuntimeError("ABBYY FineReader를 실행할 수 없습니다")
+    # 최대 20초 대기하며 창이 뜰 때까지 재시도
+    for i in range(10):
+        time.sleep(2)
+        if _find_abbyy_window():
+            logger.info(f"ABBYY 실행 완료 ({(i+1)*2}초)")
+            return
+
+    raise RuntimeError("ABBYY FineReader를 실행할 수 없습니다")
 
 
 def _open_in_ocr_editor(pdf_path: Path):
-    """Ctrl+R → OCR 편집기 열기 → 파일 선택"""
-    logger.info(f"OCR 편집기로 열기: {pdf_path}")
-    pyautogui.hotkey("ctrl", "r")
-    time.sleep(1)
+    """Ctrl+R → OCR 편집기 열기 → 파일 선택
 
-    # 파일 선택 대화상자에서 경로 입력
+    파일 대화상자가 열리면:
+    1. 파일 이름 입력란에 전체 경로를 붙여넣기
+    2. Enter로 열기
+    """
+    logger.info(f"OCR 편집기로 열기: {pdf_path}")
+
+    # ABBYY 창에 포커스 확인 후 Ctrl+R
+    _find_abbyy_window()
+    time.sleep(0.5)
+    pyautogui.hotkey("ctrl", "r")
+    time.sleep(2)  # 파일 대화상자 뜰 때까지 대기
+
+    # 파일 이름 입력란에 전체 경로 붙여넣기
+    # Alt+N으로 파일 이름 입력란으로 포커스 이동 (윈도우 파일 대화상자 표준)
+    pyautogui.hotkey("alt", "n")
+    time.sleep(0.3)
+
+    # 기존 텍스트 지우고 전체 경로 붙여넣기
+    pyautogui.hotkey("ctrl", "a")
+    time.sleep(0.1)
     pyperclip.copy(str(pdf_path))
     pyautogui.hotkey("ctrl", "v")
     time.sleep(0.5)
+
+    # 열기
     pyautogui.press("enter")
     time.sleep(WAIT_FILE_OPEN)
 
