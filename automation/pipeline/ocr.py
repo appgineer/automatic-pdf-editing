@@ -7,7 +7,7 @@ Windows 11 + ABBYY FineReader 16 Standard
 1. ABBYY FineReader 16 실행
 2. Ctrl+R → OCR 편집기 열기 (파일 선택 포함)
 3. Ctrl+. → OCR 언어 설정 (Tab*3 → 언어 입력 → Enter)
-4. Alt+F → A → S → 검색 가능한 PDF로 저장
+4. F10 → Enter → F → V → S → 검색 가능한 PDF로 저장
 """
 
 import time
@@ -135,21 +135,28 @@ def _set_language(languages: list[str]):
 
 
 def _save_as_searchable_pdf(output_path: Path):
-    """Alt+F → A → S → 검색 가능한 PDF로 저장"""
+    """F10 → Enter → F → V → S → 검색 가능한 PDF로 저장"""
     logger.info(f"검색 가능한 PDF로 저장: {output_path}")
 
     # 출력 폴더가 없으면 생성
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    pyautogui.hotkey("alt", "f")
+    # F10 → Enter → F → V → S 로 저장 대화상자 열기
+    pyautogui.press("f10")
+    time.sleep(0.5)
+    pyautogui.press("enter")
     time.sleep(0.3)
-    pyautogui.press("a")
+    pyautogui.press("f")
+    time.sleep(0.3)
+    pyautogui.press("v")
     time.sleep(0.3)
     pyautogui.press("s")
     time.sleep(1)
 
-    # 저장 대화상자에서 경로 입력
+    # 저장 대화상자에서 파일명 입력 (_ocr 붙인 전체 경로)
     pyperclip.copy(str(output_path))
+    pyautogui.hotkey("ctrl", "a")
+    time.sleep(0.2)
     pyautogui.hotkey("ctrl", "v")
     time.sleep(0.5)
     pyautogui.press("enter")
