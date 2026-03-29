@@ -193,26 +193,46 @@ class MainWindow:
             self.status_var.set("대기중")
 
     def _shutdown_computer(self):
-        """컴퓨터 전원 끄기 (취소 가능)"""
-        os.system("shutdown /s /f /t 60")
+        """컴퓨터 전원 끄기 (취소 가능, 시스템 알림 없음)"""
+        self._shutdown_cancelled = False
+        self._shutdown_remaining = 60
         self.status_var.set("60초 후 컴퓨터를 종료합니다...")
 
         # 취소 버튼 팝업
-        popup = tk.Toplevel(self.root)
-        popup.title("컴퓨터 종료")
-        popup.geometry("300x120")
-        popup.attributes("-topmost", True)
+        self._shutdown_popup = tk.Toplevel(self.root)
+        self._shutdown_popup.title("컴퓨터 종료")
+        self._shutdown_popup.geometry("300x140")
+        self._shutdown_popup.attributes("-topmost", True)
+        self._shutdown_popup.protocol("WM_DELETE_WINDOW", lambda: None)
 
-        tk.Label(popup, text="60초 후 컴퓨터가 종료됩니다.", font=("", 12)).pack(pady=15)
+        self._shutdown_label = tk.Label(
+            self._shutdown_popup, text="60초 후 컴퓨터가 종료됩니다.", font=("", 12)
+        )
+        self._shutdown_label.pack(pady=15)
         tk.Button(
-            popup, text="종료 취소", font=("", 12), width=12,
-            command=lambda: self._cancel_shutdown(popup)
+            self._shutdown_popup, text="종료 취소", font=("", 12), width=12,
+            command=self._cancel_shutdown
         ).pack(pady=5)
 
-    def _cancel_shutdown(self, popup):
-        os.system("shutdown /a")
+        self._shutdown_tick()
+
+    def _shutdown_tick(self):
+        """1초마다 카운트다운, 0이 되면 즉시 종료"""
+        if self._shutdown_cancelled:
+            return
+        self._shutdown_remaining -= 1
+        if self._shutdown_remaining <= 0:
+            self._shutdown_popup.destroy()
+            os.system("shutdown /s /f /t 0")
+            return
+        self._shutdown_label.config(text=f"{self._shutdown_remaining}초 후 컴퓨터가 종료됩니다.")
+        self.status_var.set(f"{self._shutdown_remaining}초 후 컴퓨터를 종료합니다...")
+        self.root.after(1000, self._shutdown_tick)
+
+    def _cancel_shutdown(self):
+        self._shutdown_cancelled = True
         self.status_var.set("컴퓨터 종료가 취소되었습니다.")
-        popup.destroy()
+        self._shutdown_popup.destroy()
 
     def _on_move_up(self):
         customer = self.job_tree.get_selected_customer()
