@@ -217,11 +217,11 @@ class MainWindow:
         self._shutdown_label = tk.Label(
             self._shutdown_popup, text="60초 후 컴퓨터가 종료됩니다.", font=("", 12)
         )
-        self._shutdown_label.pack(pady=15)
+        self._shutdown_label.pack(padx=30, pady=(30, 15))
         tk.Button(
             self._shutdown_popup, text="종료 취소", font=("", 12), width=12,
             command=self._cancel_shutdown
-        ).pack(pady=5)
+        ).pack(pady=(5, 25))
 
         self._shutdown_tick()
 
