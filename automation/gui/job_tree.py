@@ -26,11 +26,14 @@ class JobTree(ttk.Frame):
         self.on_select = on_select
         self._selected_job: Job | None = None
 
-        self.tree = ttk.Treeview(self, columns=("status",), show="tree", selectmode="browse")
+        style = ttk.Style()
+        style.configure("JobTree.Treeview", rowheight=28, font=("", 11))
+
+        self.tree = ttk.Treeview(self, columns=("status",), show="tree", selectmode="browse", style="JobTree.Treeview")
         scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
 
-        self.tree.column("#0", width=250)
+        self.tree.column("#0", width=350)
         self.tree.column("status", width=80, anchor=tk.E)
 
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
