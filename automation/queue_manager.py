@@ -23,6 +23,14 @@ class QueueManager:
             self._jobs.append(job)
             return True
 
+    def remove_missing_jobs(self):
+        """폴더가 삭제된 대기중 작업을 큐에서 제거"""
+        with self._lock:
+            self._jobs = [
+                j for j in self._jobs
+                if j.status != JobStatus.WAITING or j.book_dir.exists()
+            ]
+
     def get_next_job(self) -> Job | None:
         """다음 대기중인 작업 반환"""
         with self._lock:

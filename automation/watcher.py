@@ -25,6 +25,7 @@ class FolderWatcher:
     def scan_once(self, input_folder: Path):
         """폴더를 한 번만 스캔하여 리스트 등록 (작업 시작 없이)"""
         self.input_folder = input_folder
+        self.queue.remove_missing_jobs()
         self._scan_folder(skip_stable_check=True)
 
     def start(self, input_folder: Path):

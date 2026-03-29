@@ -48,6 +48,8 @@ class JobTree(ttk.Frame):
 
     def refresh(self, jobs: list[Job]):
         """전체 트리 갱신"""
+        prev_selected = self._selected_customer
+
         self.tree.delete(*self.tree.get_children())
         self._customer_nodes.clear()
         self._job_nodes.clear()
@@ -75,6 +77,12 @@ class JobTree(ttk.Frame):
                 tag = f"status_{job.status.name}"
                 self.tree.tag_configure(tag, foreground=STATUS_COLORS[job.status])
                 self.tree.item(node_id, tags=(tag,))
+
+        # 이전 선택 복원
+        if prev_selected and prev_selected in self._customer_nodes:
+            cid = self._customer_nodes[prev_selected]
+            self.tree.selection_set(cid)
+            self.tree.focus(cid)
 
     def _on_tree_select(self, event):
         selection = self.tree.selection()
