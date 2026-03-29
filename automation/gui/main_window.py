@@ -57,13 +57,6 @@ class MainWindow:
         )
         self.shutdown_btn.pack(fill=tk.X, pady=4)
 
-    def _toggle_shutdown(self):
-        self.shutdown_var.set(not self.shutdown_var.get())
-        if self.shutdown_var.get():
-            self.shutdown_btn.config(text="☑ 모든 작업 완료 후 컴퓨터 종료")
-        else:
-            self.shutdown_btn.config(text="☐ 모든 작업 완료 후 컴퓨터 종료")
-
         # 구분선
         tk.Frame(self.root, height=1, bg="#cccccc").pack(fill=tk.X)
 
@@ -78,6 +71,13 @@ class MainWindow:
             anchor=tk.W, relief=tk.SUNKEN, padx=8, pady=4
         )
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+    def _toggle_shutdown(self):
+        self.shutdown_var.set(not self.shutdown_var.get())
+        if self.shutdown_var.get():
+            self.shutdown_btn.config(text="☑ 모든 작업 완료 후 컴퓨터 종료")
+        else:
+            self.shutdown_btn.config(text="☐ 모든 작업 완료 후 컴퓨터 종료")
 
     def _load_settings(self):
         settings = load_settings()
