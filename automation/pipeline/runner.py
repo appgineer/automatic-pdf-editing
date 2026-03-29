@@ -157,7 +157,7 @@ class PipelineRunner:
             shutil.copy2(current_pdf, final_path)
 
     def _create_zip(self, customer_name: str):
-        """고객의 모든 완료된 책을 ZIP으로 압축"""
+        """고객의 모든 완료된 책을 ZIP으로 압축 후 폴더 삭제"""
         customer_dir = self.output_folder / customer_name
         if not customer_dir.exists():
             return
@@ -166,3 +166,6 @@ class PipelineRunner:
         if all_files:
             create_customer_zip(customer_name, all_files, self.output_folder)
             logger.info(f"ZIP 생성: {customer_name} 님.zip")
+
+            # ZIP 생성 후 고객 폴더 삭제 (ZIP만 남김)
+            shutil.rmtree(customer_dir, ignore_errors=True)

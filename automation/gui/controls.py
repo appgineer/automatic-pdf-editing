@@ -38,18 +38,20 @@ class ActionButtons(tk.Frame):
         btn_frame = tk.Frame(self)
         btn_frame.pack(fill=tk.X)
 
-        self.start_btn = tk.Button(btn_frame, text="시작", command=on_start, width=8)
+        btn_font = ("", 11)
+
+        self.start_btn = tk.Button(btn_frame, text="시작", command=on_start, width=8, font=btn_font, height=1)
         self.start_btn.pack(side=tk.LEFT, padx=4)
 
-        self.stop_btn = tk.Button(btn_frame, text="중지", command=on_stop, width=8, state=tk.DISABLED)
+        self.stop_btn = tk.Button(btn_frame, text="중지", command=on_stop, width=8, font=btn_font, height=1, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=4)
 
         tk.Frame(btn_frame, width=20).pack(side=tk.LEFT)
 
-        self.up_btn = tk.Button(btn_frame, text="\u25b2 위로", command=on_up, width=8)
+        self.up_btn = tk.Button(btn_frame, text="▲ 위로", command=on_up, width=8, font=btn_font, height=1)
         self.up_btn.pack(side=tk.RIGHT, padx=4)
 
-        self.down_btn = tk.Button(btn_frame, text="\u25bc 아래로", command=on_down, width=8)
+        self.down_btn = tk.Button(btn_frame, text="▼ 아래로", command=on_down, width=8, font=btn_font, height=1)
         self.down_btn.pack(side=tk.RIGHT, padx=4)
 
     def set_running(self, running: bool):
