@@ -58,7 +58,7 @@ class JobTree(ttk.Frame):
             customers.setdefault(job.customer_name, []).append(job)
 
         for customer_name, customer_jobs in customers.items():
-            cid = self.tree.insert("", tk.END, text=f"\u25bc {customer_name}", open=True)
+            cid = self.tree.insert("", tk.END, text=customer_name, open=True)
             self._customer_nodes[customer_name] = cid
 
             for job in customer_jobs:
@@ -81,16 +81,18 @@ class JobTree(ttk.Frame):
         if not selection:
             return
         node_id = selection[0]
-        self._selected_job = self._job_nodes.get(node_id)
+
+        # 책 노드면 선택 해제
+        if node_id in self._job_nodes:
+            self.tree.selection_remove(node_id)
+            return
+
+        # 고객 노드 선택
         self._selected_customer = None
-        if not self._selected_job:
-            # 고객 노드 선택 확인
-            for name, cid in self._customer_nodes.items():
-                if cid == node_id:
-                    self._selected_customer = name
-                    break
-        if self.on_select and self._selected_job:
-            self.on_select(self._selected_job)
+        for name, cid in self._customer_nodes.items():
+            if cid == node_id:
+                self._selected_customer = name
+                break
 
     def get_selected_job(self) -> Job | None:
         return self._selected_job
