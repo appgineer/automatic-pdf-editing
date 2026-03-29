@@ -24,6 +24,7 @@ class MainWindow:
         self._build_ui()
         self._load_settings()
         self._scan_input_folder()
+        self._start_auto_scan()
 
     def _build_ui(self):
         # 폴더 선택
@@ -89,6 +90,21 @@ class MainWindow:
         self.watcher.scan_once(input_dir)
         self._refresh_tree()
 
+    def _start_auto_scan(self):
+        """시작 전 5초마다 자동 스캔"""
+        self._auto_scan_id = self.root.after(5000, self._auto_scan_tick)
+
+    def _stop_auto_scan(self):
+        """자동 스캔 중지"""
+        if hasattr(self, '_auto_scan_id') and self._auto_scan_id:
+            self.root.after_cancel(self._auto_scan_id)
+            self._auto_scan_id = None
+
+    def _auto_scan_tick(self):
+        """자동 스캔 1회 실행 후 다음 예약"""
+        self._scan_input_folder()
+        self._auto_scan_id = self.root.after(5000, self._auto_scan_tick)
+
     def _on_start(self):
         input_path = self.input_selector.get_path()
         output_path = self.output_selector.get_path()
@@ -105,6 +121,9 @@ class MainWindow:
             return
 
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 자동 스캔 중지 (watcher 스레드가 대신 감시)
+        self._stop_auto_scan()
 
         # 감시 시작 (새 폴더 추가 감지용)
         self.watcher.start(input_dir)
@@ -125,6 +144,7 @@ class MainWindow:
 
         self.actions.set_running(False)
         self.status_var.set("중지됨")
+        self._start_auto_scan()
 
     def _on_new_job(self, job):
         """새 작업 감지 시 (감시 스레드에서 호출)"""
@@ -143,7 +163,10 @@ class MainWindow:
             if job.status.value == "작업중":
                 self.status_var.set(f"현재: {job.book_name} - {job.current_step}")
                 return
-        self.status_var.set("실행중 - 폴더 감시중...")
+        if self.runner and self.runner._running:
+            self.status_var.set("실행중 - 폴더 감시중...")
+        else:
+            self.status_var.set("대기중")
 
     def _on_move_up(self):
         job = self.job_tree.get_selected_job()
