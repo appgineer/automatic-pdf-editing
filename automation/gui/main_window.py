@@ -32,6 +32,9 @@ class MainWindow:
         self.input_selector = FolderSelector(folder_frame, "입력폴더:", on_change=self._on_folder_change)
         self.input_selector.pack(fill=tk.X, pady=2)
 
+        self.processing_selector = FolderSelector(folder_frame, "수정폴더:", on_change=self._on_folder_change)
+        self.processing_selector.pack(fill=tk.X, pady=2)
+
         self.output_selector = FolderSelector(folder_frame, "출력폴더:", on_change=self._on_folder_change)
         self.output_selector.pack(fill=tk.X, pady=2)
 
@@ -64,12 +67,15 @@ class MainWindow:
         settings = load_settings()
         if settings["input_folder"]:
             self.input_selector.set_path(settings["input_folder"])
+        if settings.get("processing_folder"):
+            self.processing_selector.set_path(settings["processing_folder"])
         if settings["output_folder"]:
             self.output_selector.set_path(settings["output_folder"])
 
     def _save_settings(self):
         save_settings({
             "input_folder": self.input_selector.get_path(),
+            "processing_folder": self.processing_selector.get_path(),
             "output_folder": self.output_selector.get_path(),
         })
 
@@ -78,19 +84,22 @@ class MainWindow:
 
     def _on_start(self):
         input_path = self.input_selector.get_path()
+        processing_path = self.processing_selector.get_path()
         output_path = self.output_selector.get_path()
 
-        if not input_path or not output_path:
-            self.status_var.set("입력/출력 폴더를 선택해주세요")
+        if not input_path or not processing_path or not output_path:
+            self.status_var.set("입력/수정/출력 폴더를 선택해주세요")
             return
 
         input_dir = Path(input_path)
+        processing_dir = Path(processing_path)
         output_dir = Path(output_path)
 
         if not input_dir.exists():
             self.status_var.set("입력 폴더가 존재하지 않습니다")
             return
 
+        processing_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # 감시 시작
@@ -98,7 +107,7 @@ class MainWindow:
         self.watcher.start(input_dir)
 
         # 파이프라인 시작
-        self.runner = PipelineRunner(self.queue, output_dir, on_update=self._on_job_update)
+        self.runner = PipelineRunner(self.queue, output_dir, processing_dir, on_update=self._on_job_update)
         self.runner.start()
 
         self.actions.set_running(True)

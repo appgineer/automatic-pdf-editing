@@ -57,7 +57,7 @@ def split_pdf_by_page_ranges(input_path: Path, ranges_str: str, output_dir: Path
         part_doc = fitz.open()
         part_doc.insert_pdf(doc, from_page=start, to_page=end - 1)
 
-        out_name = f"{stem}_part{idx}.pdf"
+        out_name = f"{stem}{idx}.pdf"
         out_path = output_dir / out_name
         part_doc.save(str(out_path))
         part_doc.close()
@@ -82,10 +82,11 @@ def split_pdf_by_size(input_path: Path, max_size_mb: int, output_dir: Path) -> l
     doc = fitz.open(input_path)
     total = len(doc)
 
-    # 페이지당 평균 크기로 분할 페이지 수 추정
-    pages_per_part = max(1, int(total * max_size_mb / file_size_mb))
+    # 페이지당 평균 크기로 분할 페이지 수 추정 (5MB 여유)
+    effective_max = max(1, max_size_mb - 5)
+    pages_per_part = max(1, int(total * effective_max / file_size_mb))
 
     doc.close()
     del doc
     gc.collect()
-    return split_pdf_by_count(input_path, pages_per_part, output_dir, suffix="_sz")
+    return split_pdf_by_count(input_path, pages_per_part, output_dir, suffix="")

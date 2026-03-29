@@ -11,6 +11,7 @@ def create_customer_zip(customer_name: str, files: list[Path], output_dir: Path)
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file_path in files:
-            zf.write(file_path, file_path.name)
+            arcname = f"{customer_name}/{file_path.name}"
+            zf.write(file_path, arcname)
 
     return zip_path
