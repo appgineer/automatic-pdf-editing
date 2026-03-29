@@ -52,8 +52,8 @@ class MainWindow:
         self.shutdown_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
             folder_frame, text="모든 작업 완료 후 컴퓨터 종료",
-            variable=self.shutdown_var
-        ).pack(fill=tk.X, pady=2)
+            variable=self.shutdown_var, font=("", 12)
+        ).pack(fill=tk.X, pady=4)
 
         # 구분선
         tk.Frame(self.root, height=1, bg="#cccccc").pack(fill=tk.X)
@@ -184,9 +184,9 @@ class MainWindow:
             self.status_var.set("대기중")
 
     def _shutdown_computer(self):
-        """컴퓨터 종료"""
-        self.status_var.set("30초 후 컴퓨터를 종료합니다...")
-        os.system("shutdown /s /t 30")
+        """컴퓨터 전원 끄기"""
+        self.status_var.set("60초 후 컴퓨터를 종료합니다...")
+        os.system("shutdown /s /f /t 60")
 
     def _on_move_up(self):
         customer = self.job_tree.get_selected_customer()

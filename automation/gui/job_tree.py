@@ -65,7 +65,10 @@ class JobTree(ttk.Frame):
 
             for job in customer_jobs:
                 symbol = STATUS_SYMBOLS[job.status]
-                status_text = job.status.value
+                if job.status == JobStatus.RUNNING and job.current_step:
+                    status_text = job.current_step
+                else:
+                    status_text = job.status.value
                 node_id = self.tree.insert(
                     cid, tk.END,
                     text=f"  {symbol} {job.book_name}",
