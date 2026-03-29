@@ -22,6 +22,11 @@ class FolderWatcher:
         self._thread: threading.Thread | None = None
         self._known_sizes: dict[str, int] = {}  # 파일 안정성 체크용
 
+    def scan_once(self, input_folder: Path):
+        """폴더를 한 번만 스캔하여 리스트 등록 (작업 시작 없이)"""
+        self.input_folder = input_folder
+        self._scan_folder(skip_stable_check=True)
+
     def start(self, input_folder: Path):
         self.input_folder = input_folder
         self._running = True
@@ -41,7 +46,7 @@ class FolderWatcher:
                 logger.error(f"폴더 감시 오류: {e}")
             time.sleep(POLL_INTERVAL)
 
-    def _scan_folder(self):
+    def _scan_folder(self, skip_stable_check=False):
         if not self.input_folder or not self.input_folder.exists():
             return
 
@@ -60,8 +65,8 @@ class FolderWatcher:
                 if not config_path.exists() or not pdf_files:
                     continue
 
-                # 파일 안정성 체크 (크기 변화 없으면 완료)
-                if not self._files_stable(pdf_files):
+                # 파일 안정성 체크 (scan_once에서는 건너뜀)
+                if not skip_stable_check and not self._files_stable(pdf_files):
                     continue
 
                 try:

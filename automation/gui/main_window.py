@@ -18,11 +18,12 @@ class MainWindow:
         self.root.geometry("550x500")
 
         self.queue = QueueManager()
-        self.watcher: FolderWatcher | None = None
         self.runner: PipelineRunner | None = None
+        self.watcher = FolderWatcher(self.queue, on_new_job=self._on_new_job)
 
         self._build_ui()
         self._load_settings()
+        self._scan_input_folder()
 
     def _build_ui(self):
         # 폴더 선택
@@ -75,6 +76,18 @@ class MainWindow:
 
     def _on_folder_change(self, _path: str):
         self._save_settings()
+        self._scan_input_folder()
+
+    def _scan_input_folder(self):
+        """입력폴더를 스캔하여 리스트만 불러오기 (작업 시작 안 함)"""
+        input_path = self.input_selector.get_path()
+        if not input_path:
+            return
+        input_dir = Path(input_path)
+        if not input_dir.exists():
+            return
+        self.watcher.scan_once(input_dir)
+        self._refresh_tree()
 
     def _on_start(self):
         input_path = self.input_selector.get_path()
@@ -93,8 +106,7 @@ class MainWindow:
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 감시 시작
-        self.watcher = FolderWatcher(self.queue, on_new_job=self._on_new_job)
+        # 감시 시작 (새 폴더 추가 감지용)
         self.watcher.start(input_dir)
 
         # 파이프라인 시작
