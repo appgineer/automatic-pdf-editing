@@ -7,7 +7,6 @@ SETTINGS_FILE = Path(__file__).parent.parent / "settings.json"
 
 DEFAULT_SETTINGS = {
     "input_folder": "",
-    "processing_folder": "",
     "output_folder": "",
 }
 

@@ -21,10 +21,9 @@ OCR_SPLIT_PAGES = 150  # OCR 전 분할 단위
 
 
 class PipelineRunner:
-    def __init__(self, queue: QueueManager, output_folder: Path, processing_folder: Path, on_update=None):
+    def __init__(self, queue: QueueManager, output_folder: Path, on_update=None):
         self.queue = queue
         self.output_folder = output_folder
-        self.processing_folder = processing_folder
         self.on_update = on_update
         self._running = False
         self._thread: threading.Thread | None = None
@@ -78,8 +77,12 @@ class PipelineRunner:
             gc.collect()
             try:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
-            except Exception:
-                pass
+                if Path(tmp_dir).exists():
+                    logger.warning(f"임시폴더 삭제 실패: {tmp_dir}")
+                else:
+                    logger.info(f"임시폴더 삭제 완료: {tmp_dir}")
+            except Exception as e:
+                logger.warning(f"임시폴더 삭제 중 오류: {tmp_dir} - {e}")
 
         self._notify()
 
@@ -104,17 +107,17 @@ class PipelineRunner:
 
         # --- Stage 2: OCR 처리 (ocr=true일 때) ---
         if config.ocr:
-            proc_dir = self.processing_folder / job.customer_name / job.book_name
-            proc_dir.mkdir(parents=True, exist_ok=True)
+            ocr_dir = tmp / "ocr_splits"
+            ocr_dir.mkdir(parents=True, exist_ok=True)
 
-            # 150페이지 단위로 분할 → 수정폴더에 저장
+            # 150페이지 단위로 분할 → tmp/ocr_splits에 저장
             job.current_step = "OCR 분할"
             self._notify()
-            split_files = split_pdf_by_count(current_pdf, OCR_SPLIT_PAGES, proc_dir)
+            split_files = split_pdf_by_count(current_pdf, OCR_SPLIT_PAGES, ocr_dir)
 
-            # 분할 안 된 경우 (150페이지 이하) 수정폴더로 복사
+            # 분할 안 된 경우 (150페이지 이하) ocr_dir로 복사
             if len(split_files) == 1 and split_files[0] == current_pdf:
-                dest = proc_dir / f"{job.book_name}.pdf"
+                dest = ocr_dir / f"{job.book_name}.pdf"
                 shutil.copy2(current_pdf, dest)
                 split_files = [dest]
 
@@ -123,7 +126,7 @@ class PipelineRunner:
             for i, split_file in enumerate(split_files, 1):
                 job.current_step = f"OCR 처리중 ({i}/{len(split_files)})"
                 self._notify()
-                ocr_out = proc_dir / f"{split_file.stem}_OCR.pdf"
+                ocr_out = ocr_dir / f"{split_file.stem}_OCR.pdf"
                 run_ocr(split_file, ocr_out, config.ocr_language)
                 ocr_files.append(ocr_out)
 
@@ -133,12 +136,6 @@ class PipelineRunner:
             ocr_merged_path = tmp / f"{job.book_name}.pdf"
             merge_pdfs(ocr_files, ocr_merged_path)
             current_pdf = ocr_merged_path
-
-            # 수정폴더 정리
-            try:
-                shutil.rmtree(proc_dir, ignore_errors=True)
-            except Exception:
-                pass
 
         # --- Stage 3: 최종 출력 ---
         output_dir = self.output_folder / job.customer_name
