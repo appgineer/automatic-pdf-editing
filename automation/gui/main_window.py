@@ -1,5 +1,6 @@
 """메인 윈도우"""
 
+import os
 import tkinter as tk
 from pathlib import Path
 
@@ -46,6 +47,13 @@ class MainWindow:
             on_down=self._on_move_down,
         )
         self.actions.pack(fill=tk.X, pady=4)
+
+        # 완료 후 종료 체크박스
+        self.shutdown_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            folder_frame, text="모든 작업 완료 후 컴퓨터 종료",
+            variable=self.shutdown_var
+        ).pack(fill=tk.X, pady=2)
 
         # 구분선
         tk.Frame(self.root, height=1, bg="#cccccc").pack(fill=tk.X)
@@ -163,10 +171,22 @@ class MainWindow:
             if job.status.value == "작업중":
                 self.status_var.set(f"현재: {job.book_name} - {job.current_step}")
                 return
+
         if self.runner and self.runner._running:
-            self.status_var.set("실행중 - 폴더 감시중...")
+            # 모든 작업 완료 체크
+            if jobs and all(j.status.value in ("완료", "오류") for j in jobs):
+                self.status_var.set("모든 작업 완료")
+                if self.shutdown_var.get():
+                    self._shutdown_computer()
+            else:
+                self.status_var.set("실행중 - 폴더 감시중...")
         else:
             self.status_var.set("대기중")
+
+    def _shutdown_computer(self):
+        """컴퓨터 종료"""
+        self.status_var.set("30초 후 컴퓨터를 종료합니다...")
+        os.system("shutdown /s /t 30")
 
     def _on_move_up(self):
         customer = self.job_tree.get_selected_customer()
