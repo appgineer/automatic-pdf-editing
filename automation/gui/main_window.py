@@ -48,21 +48,21 @@ class MainWindow:
         )
         self.actions.pack(fill=tk.X, pady=4)
 
-        # 완료 후 종료 체크박스 (텍스트 버튼 방식으로 크게)
-        self.shutdown_var = tk.BooleanVar(value=False)
-        self.shutdown_btn = tk.Button(
-            folder_frame, text="☐ 모든 작업 완료 후 컴퓨터 종료",
-            font=("", 13), relief=tk.FLAT, anchor=tk.W,
-            command=self._toggle_shutdown
-        )
-        self.shutdown_btn.pack(fill=tk.X, pady=4)
-
         # 구분선
         tk.Frame(self.root, height=1, bg="#cccccc").pack(fill=tk.X)
 
         # 작업 목록
         self.job_tree = JobTree(self.root)
         self.job_tree.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
+
+        # 완료 후 종료 체크박스 (작업 목록 아래, 오른쪽 정렬)
+        self.shutdown_var = tk.BooleanVar(value=False)
+        self.shutdown_btn = tk.Button(
+            self.root, text="☐ 모든 작업 완료 후 컴퓨터 종료",
+            font=("", 10), relief=tk.FLAT, anchor=tk.E,
+            command=self._toggle_shutdown
+        )
+        self.shutdown_btn.pack(fill=tk.X, padx=8, anchor=tk.E)
 
         # 상태바
         self.status_var = tk.StringVar(value="대기중")
