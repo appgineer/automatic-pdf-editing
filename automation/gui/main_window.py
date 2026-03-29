@@ -59,10 +59,10 @@ class MainWindow:
         self.shutdown_var = tk.BooleanVar(value=False)
         self.shutdown_btn = tk.Button(
             self.root, text="☐ 모든 작업 완료 후 컴퓨터 종료",
-            font=("", 10), relief=tk.FLAT, anchor=tk.E,
-            command=self._toggle_shutdown
+            font=("", 10), relief=tk.FLAT,
+            command=self._toggle_shutdown, bd=0, highlightthickness=0
         )
-        self.shutdown_btn.pack(fill=tk.X, padx=8, anchor=tk.E)
+        self.shutdown_btn.pack(padx=8, anchor=tk.E)
 
         # 상태바
         self.status_var = tk.StringVar(value="대기중")
