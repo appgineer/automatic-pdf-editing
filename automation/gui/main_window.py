@@ -193,9 +193,26 @@ class MainWindow:
             self.status_var.set("대기중")
 
     def _shutdown_computer(self):
-        """컴퓨터 전원 끄기"""
-        self.status_var.set("60초 후 컴퓨터를 종료합니다...")
+        """컴퓨터 전원 끄기 (취소 가능)"""
         os.system("shutdown /s /f /t 60")
+        self.status_var.set("60초 후 컴퓨터를 종료합니다...")
+
+        # 취소 버튼 팝업
+        popup = tk.Toplevel(self.root)
+        popup.title("컴퓨터 종료")
+        popup.geometry("300x120")
+        popup.attributes("-topmost", True)
+
+        tk.Label(popup, text="60초 후 컴퓨터가 종료됩니다.", font=("", 12)).pack(pady=15)
+        tk.Button(
+            popup, text="종료 취소", font=("", 12), width=12,
+            command=lambda: self._cancel_shutdown(popup)
+        ).pack(pady=5)
+
+    def _cancel_shutdown(self, popup):
+        os.system("shutdown /a")
+        self.status_var.set("컴퓨터 종료가 취소되었습니다.")
+        popup.destroy()
 
     def _on_move_up(self):
         customer = self.job_tree.get_selected_customer()
