@@ -16,7 +16,7 @@ class MainWindow:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("PDF 자동 처리 시스템")
-        self.root.geometry("750x650")
+        self.root.geometry("1500x1300")
 
         self.queue = QueueManager()
         self.runner: PipelineRunner | None = None
