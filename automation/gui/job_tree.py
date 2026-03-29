@@ -25,6 +25,7 @@ class JobTree(ttk.Frame):
         super().__init__(parent)
         self.on_select = on_select
         self._selected_job: Job | None = None
+        self._selected_customer: str | None = None
 
         style = ttk.Style()
         style.configure("JobTree.Treeview", rowheight=28, font=("", 11))
@@ -80,11 +81,19 @@ class JobTree(ttk.Frame):
         if not selection:
             return
         node_id = selection[0]
-        job = self._job_nodes.get(node_id)
-        if job:
-            self._selected_job = job
-            if self.on_select:
-                self.on_select(job)
+        self._selected_job = self._job_nodes.get(node_id)
+        self._selected_customer = None
+        if not self._selected_job:
+            # 고객 노드 선택 확인
+            for name, cid in self._customer_nodes.items():
+                if cid == node_id:
+                    self._selected_customer = name
+                    break
+        if self.on_select and self._selected_job:
+            self.on_select(self._selected_job)
 
     def get_selected_job(self) -> Job | None:
         return self._selected_job
+
+    def get_selected_customer(self) -> str | None:
+        return self._selected_customer

@@ -169,12 +169,22 @@ class MainWindow:
             self.status_var.set("대기중")
 
     def _on_move_up(self):
+        customer = self.job_tree.get_selected_customer()
+        if customer:
+            self.queue.move_customer_up(customer)
+            self._refresh_tree()
+            return
         job = self.job_tree.get_selected_job()
         if job:
             self.queue.move_up(job)
             self._refresh_tree()
 
     def _on_move_down(self):
+        customer = self.job_tree.get_selected_customer()
+        if customer:
+            self.queue.move_customer_down(customer)
+            self._refresh_tree()
+            return
         job = self.job_tree.get_selected_job()
         if job:
             self.queue.move_down(job)
