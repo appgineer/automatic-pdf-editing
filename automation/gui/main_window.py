@@ -48,12 +48,21 @@ class MainWindow:
         )
         self.actions.pack(fill=tk.X, pady=4)
 
-        # 완료 후 종료 체크박스
+        # 완료 후 종료 체크박스 (텍스트 버튼 방식으로 크게)
         self.shutdown_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(
-            folder_frame, text="모든 작업 완료 후 컴퓨터 종료",
-            variable=self.shutdown_var, font=("", 12)
-        ).pack(fill=tk.X, pady=4)
+        self.shutdown_btn = tk.Button(
+            folder_frame, text="☐ 모든 작업 완료 후 컴퓨터 종료",
+            font=("", 13), relief=tk.FLAT, anchor=tk.W,
+            command=self._toggle_shutdown
+        )
+        self.shutdown_btn.pack(fill=tk.X, pady=4)
+
+    def _toggle_shutdown(self):
+        self.shutdown_var.set(not self.shutdown_var.get())
+        if self.shutdown_var.get():
+            self.shutdown_btn.config(text="☑ 모든 작업 완료 후 컴퓨터 종료")
+        else:
+            self.shutdown_btn.config(text="☐ 모든 작업 완료 후 컴퓨터 종료")
 
         # 구분선
         tk.Frame(self.root, height=1, bg="#cccccc").pack(fill=tk.X)
