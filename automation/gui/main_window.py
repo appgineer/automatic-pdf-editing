@@ -198,12 +198,21 @@ class MainWindow:
         self._shutdown_remaining = 60
         self.status_var.set("60초 후 컴퓨터를 종료합니다...")
 
-        # 취소 버튼 팝업
+        # 취소 버튼 팝업 (메인 창 가운데에 표시)
         self._shutdown_popup = tk.Toplevel(self.root)
         self._shutdown_popup.title("컴퓨터 종료")
-        self._shutdown_popup.geometry("300x140")
         self._shutdown_popup.attributes("-topmost", True)
         self._shutdown_popup.protocol("WM_DELETE_WINDOW", lambda: None)
+        self._shutdown_popup.resizable(False, False)
+
+        popup_w, popup_h = 400, 150
+        root_x = self.root.winfo_x()
+        root_y = self.root.winfo_y()
+        root_w = self.root.winfo_width()
+        root_h = self.root.winfo_height()
+        x = root_x + (root_w - popup_w) // 2
+        y = root_y + (root_h - popup_h) // 2
+        self._shutdown_popup.geometry(f"{popup_w}x{popup_h}+{x}+{y}")
 
         self._shutdown_label = tk.Label(
             self._shutdown_popup, text="60초 후 컴퓨터가 종료됩니다.", font=("", 12)
