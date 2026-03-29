@@ -16,7 +16,7 @@ class MainWindow:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("PDF 자동 처리 시스템")
-        self.root.geometry("550x500")
+        self.root.geometry("750x650")
 
         self.queue = QueueManager()
         self.runner: PipelineRunner | None = None
@@ -205,7 +205,7 @@ class MainWindow:
         self._shutdown_popup.protocol("WM_DELETE_WINDOW", lambda: None)
         self._shutdown_popup.resizable(False, False)
 
-        popup_w, popup_h = 400, 150
+        popup_w, popup_h = 500, 200
         root_x = self.root.winfo_x()
         root_y = self.root.winfo_y()
         root_w = self.root.winfo_width()
