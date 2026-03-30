@@ -90,14 +90,10 @@ class PipelineRunner:
         pdf_files = job.get_pdf_files()
         config = job.config
 
-        # --- Stage 1: PDF 합치기 ---
-        job.current_step = "PDF 합치기"
-        self._notify()
-        merged_path = tmp / f"{job.book_name}.pdf"
-        merge_pdfs(pdf_files, merged_path)
-        current_pdf = merged_path
+        # 단일 PDF 사용
+        current_pdf = pdf_files[0]
 
-        # --- Stage 1.5: 레벨 조정 (고급일 때만) ---
+        # --- 레벨 조정 (고급일 때만) ---
         if config.scan_type == "고급":
             job.current_step = "레벨 조정"
             self._notify()
