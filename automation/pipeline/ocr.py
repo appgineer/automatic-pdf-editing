@@ -114,8 +114,7 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 600):
             break
         time.sleep(1)
     else:
-        logger.warning(f"파일 생성 타임아웃: {file_path}")
-        return
+        raise RuntimeError(f"OCR 파일 생성 타임아웃 ({timeout}초): {file_path}")
 
     # 2. 파일 크기가 안정될 때까지 대기 (3초간 변화 없으면 완료)
     prev_size = -1
@@ -132,7 +131,7 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 600):
         prev_size = current_size
         time.sleep(1)
 
-    logger.warning(f"파일 안정화 타임아웃: {file_path}")
+    raise RuntimeError(f"OCR 파일 안정화 타임아웃 ({timeout}초): {file_path}")
 
 
 def _save_as_searchable_pdf(output_path: Path):
@@ -176,15 +175,29 @@ def _save_as_searchable_pdf(output_path: Path):
     logger.info(f"저장 완료: {output_path}")
 
 
-def _close_abbyy():
-    """ABBYY 프로세스 모두 종료"""
+def _close_abbyy(timeout: int = 15):
+    """ABBYY 프로세스 모두 종료 후 완전 종료 확인"""
     import subprocess
     try:
-        subprocess.run(["taskkill", "/F", "/IM", "FineReader.exe"], capture_output=True)
-        logger.info("ABBYY 프로세스 종료 완료")
-        time.sleep(1)
+        subprocess.run(["taskkill", "/F", "/T", "/IM", "FineReader.exe"], capture_output=True)
+        logger.info("ABBYY 프로세스 종료 명령 실행")
     except Exception as e:
         logger.warning(f"ABBYY 종료 실패: {e}")
+        return
+
+    # 프로세스가 완전히 종료될 때까지 폴링
+    start = time.time()
+    while time.time() - start < timeout:
+        result = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq FineReader.exe"],
+            capture_output=True, text=True
+        )
+        if "FineReader.exe" not in result.stdout:
+            logger.info("ABBYY 프로세스 완전 종료 확인")
+            time.sleep(1)
+            return
+        time.sleep(0.5)
+    logger.warning("ABBYY 프로세스 종료 타임아웃")
 
 
 def run_ocr(input_path: Path, output_path: Path, languages: list[str] | str = "Korean") -> Path:
