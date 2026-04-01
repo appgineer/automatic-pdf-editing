@@ -184,6 +184,8 @@ def _save_as_image_pdf(output_path: Path):
     _find_abbyy_window()
     time.sleep(1.5)
     pyautogui.hotkey("alt", "shift", "f")
+    time.sleep(1)
+    pyautogui.hotkey("alt", "shift", "f")
     time.sleep(1.5)
     pyautogui.press("a")
     time.sleep(1.5)
@@ -208,6 +210,8 @@ def _save_as_searchable_pdf(output_path: Path):
 
     _find_abbyy_window()
     time.sleep(1.5)
+    pyautogui.hotkey("alt", "shift", "f")
+    time.sleep(1)
     pyautogui.hotkey("alt", "shift", "f")
     time.sleep(1.5)
     pyautogui.press("a")
