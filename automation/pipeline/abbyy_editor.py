@@ -224,9 +224,7 @@ def _save_as_searchable_pdf(output_path: Path):
     pyautogui.press("a")
     time.sleep(1)
     pyautogui.press("s")
-    time.sleep(3)
-    pyautogui.press("enter")  # OCR 안내창 닫기
-    time.sleep(1.5)
+    time.sleep(2)
 
     pyperclip.copy(str(output_path))
     pyautogui.hotkey("ctrl", "a")
@@ -234,6 +232,8 @@ def _save_as_searchable_pdf(output_path: Path):
     pyautogui.hotkey("ctrl", "v")
     time.sleep(1.5)
     pyautogui.press("enter")
+    time.sleep(2)
+    pyautogui.press("enter")  # OCR 안내창 닫기
 
     _wait_for_file_complete(output_path)
     logger.info(f"저장 완료: {output_path}")
