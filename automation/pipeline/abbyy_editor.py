@@ -35,6 +35,7 @@ pyautogui.PAUSE = 0.3
 
 # ABBYY 편집기 실행 경로 (설치 환경에 따라 조정)
 ABBYY_EXE_PATHS = [
+    r"C:\Program Files\ABBYY FineReader 16\FineReader.exe",
     r"C:\Program Files\ABBYY FineReader PDF 16\FineReader.exe",
     r"C:\Program Files (x86)\ABBYY FineReader PDF 16\FineReader.exe",
 ]

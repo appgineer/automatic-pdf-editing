@@ -1,8 +1,15 @@
 """메인 윈도우"""
 
+import glob
+import logging
 import os
+import shutil
+import subprocess
+import tempfile
 import tkinter as tk
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from automation.config import load_settings, save_settings
 from automation.queue_manager import QueueManager
@@ -21,6 +28,8 @@ class MainWindow:
         self.queue = QueueManager()
         self.runner: PipelineRunner | None = None
         self.watcher = FolderWatcher(self.queue, on_new_job=self._on_new_job)
+
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._build_ui()
         self._load_settings()
@@ -162,6 +171,35 @@ class MainWindow:
         self.actions.set_running(False)
         self.status_var.set("중지됨")
         self._start_auto_scan()
+
+    def _on_close(self):
+        """X 버튼 종료: ABBYY 종료 → 파이프라인 중지 → 임시폴더 정리 → 앱 종료"""
+        # 1. ABBYY 프로세스 종료 (파일 잠금 해제)
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/IM", "FineReader.exe"],
+                capture_output=True, timeout=10,
+            )
+        except Exception:
+            pass
+
+        # 2. 파이프라인/감시 중지
+        if self.watcher:
+            self.watcher.stop()
+        if self.runner:
+            self.runner.stop()
+
+        # 3. 남은 임시폴더 정리
+        tmp_base = tempfile.gettempdir()
+        for d in glob.glob(os.path.join(tmp_base, "tmp*")):
+            if os.path.isdir(d):
+                try:
+                    shutil.rmtree(d)
+                except Exception:
+                    pass
+
+        logger.info("앱 종료 - 정리 완료")
+        self.root.destroy()
 
     def _on_new_job(self, job):
         """새 작업 감지 시 (감시 스레드에서 호출)"""
