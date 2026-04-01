@@ -201,7 +201,7 @@ def _close_abbyy(timeout: int = 15):
                 break
         if not still_running:
             logger.info("ABBYY 프로세스 완전 종료 확인")
-            time.sleep(1)
+            time.sleep(3)
             return
         time.sleep(0.5)
     logger.warning("ABBYY 프로세스 종료 타임아웃")

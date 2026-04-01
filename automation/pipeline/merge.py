@@ -19,7 +19,7 @@ def merge_pdfs(pdf_files: list[Path], output_path: Path) -> Path:
         merged.insert_pdf(doc)
         doc.close()
         del doc
-    merged.save(str(output_path))
+    merged.save(str(output_path), garbage=4, deflate=True)
     merged.close()
     del merged
     gc.collect()
