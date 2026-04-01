@@ -132,46 +132,38 @@ def _apply_levels(black_point: int, white_point: int):
 
 
 def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
-    """로딩 바 창이 나타났다가 사라질 때까지 대기 (pygetwindow)"""
+    """'이미지를 처리하는 중' 창이 나타났다가 사라질 때까지 대기"""
     import pygetwindow as gw
+
+    LOADING_TITLE = "이미지를 처리하는 중"
 
     logger.info("레벨 처리 완료 대기중...")
     start = time.time()
 
-    # 메인 ABBYY 창 제목 기억
-    main_titles = set()
-    for win in gw.getAllWindows():
-        if "finereader" in win.title.lower():
-            main_titles.add(win.title)
-
-    # Phase 1: 새로운 창(로딩 바)이 나타날 때까지 대기
+    # Phase 1: '이미지를 처리하는 중' 창이 나타날 때까지 대기
     loading_appeared = False
     while time.time() - start < timeout:
         for win in gw.getAllWindows():
-            if win.title and win.title not in main_titles and "finereader" not in win.title.lower():
-                # 메인 ABBYY 창이 아닌 새 창이 나타남
-                if win.title.strip():
-                    loading_appeared = True
-                    logger.info(f"로딩 창 감지: '{win.title}'")
-                    break
+            if LOADING_TITLE in win.title:
+                loading_appeared = True
+                logger.info(f"로딩 창 감지: '{win.title}'")
+                break
         if loading_appeared:
             break
         time.sleep(LOADING_POLL_INTERVAL)
 
     if not loading_appeared:
-        # 5초 내 로딩 창 미감지 시 이미 완료된 것으로 간주
         logger.warning("로딩 창 미감지 - 이미 완료되었을 수 있음")
         time.sleep(3)
         return
 
-    # Phase 2: 로딩 창이 사라질 때까지 대기
+    # Phase 2: '이미지를 처리하는 중' 창이 사라질 때까지 대기
     while time.time() - start < timeout:
         found = False
         for win in gw.getAllWindows():
-            if win.title and win.title not in main_titles and "finereader" not in win.title.lower():
-                if win.title.strip():
-                    found = True
-                    break
+            if LOADING_TITLE in win.title:
+                found = True
+                break
         if not found:
             logger.info(f"레벨 처리 완료 ({time.time() - start:.0f}초)")
             time.sleep(1)
