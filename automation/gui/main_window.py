@@ -173,21 +173,21 @@ class MainWindow:
         self._start_auto_scan()
 
     def _on_close(self):
-        """X 버튼 종료: ABBYY 종료 → 파이프라인 중지 → 임시폴더 정리 → 앱 종료"""
+        """X 버튼 종료: ABBYY 종료 → 임시폴더 정리 → 즉시 종료"""
         # 1. ABBYY 프로세스 종료 (파일 잠금 해제)
         try:
             subprocess.run(
-                ["taskkill", "/F", "/T", "/IM", "FineReader.exe"],
-                capture_output=True, timeout=10,
+                ["taskkill", "/F", "/T", "/IM", "FineReaderOCR.exe"],
+                capture_output=True, timeout=5,
             )
         except Exception:
             pass
 
-        # 2. 파이프라인/감시 중지
+        # 2. 파이프라인 플래그만 끄기 (스레드 대기 안 함)
+        if self.runner:
+            self.runner._running = False
         if self.watcher:
             self.watcher.stop()
-        if self.runner:
-            self.runner.stop()
 
         # 3. 남은 임시폴더 정리
         tmp_base = tempfile.gettempdir()
