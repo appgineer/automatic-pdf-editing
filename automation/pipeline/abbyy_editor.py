@@ -166,7 +166,7 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
                 break
         if not found:
             logger.info(f"레벨 처리 완료 ({time.time() - start:.0f}초)")
-            time.sleep(1)
+            time.sleep(3)
             _find_abbyy_window()
             return
         time.sleep(LOADING_POLL_INTERVAL)
@@ -183,7 +183,7 @@ def _save_as_image_pdf(output_path: Path):
 
     _find_abbyy_window()
     time.sleep(1.5)
-    pyautogui.hotkey("alt", "f")
+    pyautogui.hotkey("alt", "shift", "f")
     time.sleep(1.5)
     pyautogui.press("a")
     time.sleep(1.5)
@@ -208,7 +208,7 @@ def _save_as_searchable_pdf(output_path: Path):
 
     _find_abbyy_window()
     time.sleep(1.5)
-    pyautogui.hotkey("alt", "f")
+    pyautogui.hotkey("alt", "shift", "f")
     time.sleep(1.5)
     pyautogui.press("a")
     time.sleep(1.5)
