@@ -10,14 +10,15 @@ from pathlib import Path
 from automation.models import Job, JobStatus
 from automation.queue_manager import QueueManager
 from automation.pipeline.merge import merge_pdfs
-from automation.pipeline.levels import apply_levels_to_pdf
 from automation.pipeline.split import split_pdf_by_count, split_pdf_by_page_ranges, split_pdf_by_size
 from automation.pipeline.ocr import run_ocr
+from automation.pipeline.abbyy_editor import run_levels_only, run_levels_with_ocr
+from automation.pipeline.page_utils import prepend_first_page, delete_first_page
 from automation.pipeline.compress import create_customer_zip
 
 logger = logging.getLogger(__name__)
 
-OCR_SPLIT_PAGES = 150  # OCR 전 분할 단위
+SPLIT_PAGES = 150  # 분할 단위 (OCR, 고급 공통)
 
 
 class PipelineRunner:
@@ -89,68 +90,131 @@ class PipelineRunner:
     def _run_pipeline(self, job: Job, tmp: Path):
         pdf_files = job.get_pdf_files()
         config = job.config
-
-        # 단일 PDF 사용
         current_pdf = pdf_files[0]
 
-        # --- 레벨 조정 (고급일 때만) ---
-        if config.scan_type == "고급":
-            job.current_step = "레벨 조정"
-            self._notify()
-            leveled_path = tmp / f"{job.book_name}_leveled.pdf"
-            apply_levels_to_pdf(current_pdf, leveled_path, config.black_point, config.white_point)
-            current_pdf = leveled_path
+        # --- 3가지 Flow 분기 ---
+        if config.scan_type == "고급" and config.ocr:
+            current_pdf = self._flow_advanced_ocr(job, tmp, current_pdf)
+        elif config.scan_type == "고급":
+            current_pdf = self._flow_advanced_only(job, tmp, current_pdf)
+        elif config.ocr:
+            current_pdf = self._flow_standard_ocr(job, tmp, current_pdf)
 
-        # --- Stage 2: OCR 처리 (ocr=true일 때) ---
-        if config.ocr:
-            ocr_dir = tmp / "ocr_splits"
-            ocr_dir.mkdir(parents=True, exist_ok=True)
-
-            # 150페이지 단위로 분할 → tmp/ocr_splits에 저장
-            job.current_step = "OCR 분할"
-            self._notify()
-            split_files = split_pdf_by_count(current_pdf, OCR_SPLIT_PAGES, ocr_dir)
-
-            # 분할 안 된 경우 (150페이지 이하) ocr_dir로 복사
-            if len(split_files) == 1 and split_files[0] == current_pdf:
-                dest = ocr_dir / f"{job.book_name}.pdf"
-                shutil.copy2(current_pdf, dest)
-                split_files = [dest]
-
-            # 각 분할 파일에 OCR 실행
-            ocr_files = []
-            for i, split_file in enumerate(split_files, 1):
-                job.current_step = f"OCR 처리중 ({i}/{len(split_files)})"
-                self._notify()
-                ocr_out = ocr_dir / f"{split_file.stem}_OCR.pdf"
-                run_ocr(split_file, ocr_out, config.ocr_language)
-                ocr_files.append(ocr_out)
-
-            # OCR 결과를 tmp에서 재합치기
-            job.current_step = "OCR 결과 합치기"
-            self._notify()
-            ocr_merged_path = tmp / f"{job.book_name}.pdf"
-            merge_pdfs(ocr_files, ocr_merged_path)
-            current_pdf = ocr_merged_path
-
-        # --- Stage 3: 최종 출력 ---
+        # --- 최종 출력 ---
         output_dir = self.output_folder / job.customer_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
         if config.is_split and config.split_method == "page" and config.split_page_ranges:
             job.current_step = "페이지 범위 분할"
             self._notify()
-            # split_pdf_by_page_ranges는 stem 기반으로 파일명 생성
-            # current_pdf의 stem이 book_name이므로 책이름1.pdf, 책이름2.pdf 형태
             split_pdf_by_page_ranges(current_pdf, config.split_page_ranges, output_dir)
         elif config.is_split and config.split_method == "size" and config.split_size_mb > 0:
             job.current_step = "크기 기준 분할"
             self._notify()
             split_pdf_by_size(current_pdf, config.split_size_mb, output_dir)
         else:
-            # 분할 없이 최종 파일 복사
             final_path = output_dir / f"{job.book_name}.pdf"
             shutil.copy2(current_pdf, final_path)
+
+    # ── Flow 1: 일반+OCR ─────────────────────────────────────
+
+    def _flow_standard_ocr(self, job: Job, tmp: Path, current_pdf: Path) -> Path:
+        """일반+OCR: 분할 → ABBYY OCR → 합치기"""
+        config = job.config
+        ocr_dir = tmp / "ocr_splits"
+        ocr_dir.mkdir(parents=True, exist_ok=True)
+
+        job.current_step = "OCR 분할"
+        self._notify()
+        split_files = split_pdf_by_count(current_pdf, SPLIT_PAGES, ocr_dir)
+
+        if len(split_files) == 1 and split_files[0] == current_pdf:
+            dest = ocr_dir / f"{job.book_name}.pdf"
+            shutil.copy2(current_pdf, dest)
+            split_files = [dest]
+
+        ocr_files = []
+        for i, split_file in enumerate(split_files, 1):
+            job.current_step = f"OCR 처리중 ({i}/{len(split_files)})"
+            self._notify()
+            ocr_out = ocr_dir / f"{split_file.stem}_OCR.pdf"
+            run_ocr(split_file, ocr_out, config.ocr_language)
+            ocr_files.append(ocr_out)
+
+        job.current_step = "OCR 결과 합치기"
+        self._notify()
+        merged = tmp / f"{job.book_name}.pdf"
+        merge_pdfs(ocr_files, merged)
+        return merged
+
+    # ── Flow 2: 고급만 (no OCR) ──────────────────────────────
+
+    def _flow_advanced_only(self, job: Job, tmp: Path, current_pdf: Path) -> Path:
+        """고급만: 분할 → 첫페이지복사 → ABBYY 레벨 → 첫페이지삭제 → 합치기"""
+        config = job.config
+        split_dir = tmp / "adv_splits"
+        split_dir.mkdir(parents=True, exist_ok=True)
+
+        job.current_step = "분할"
+        self._notify()
+        split_files = split_pdf_by_count(current_pdf, SPLIT_PAGES, split_dir)
+
+        if len(split_files) == 1 and split_files[0] == current_pdf:
+            dest = split_dir / f"{job.book_name}.pdf"
+            shutil.copy2(current_pdf, dest)
+            split_files = [dest]
+
+        result_files = []
+        for i, split_file in enumerate(split_files, 1):
+            job.current_step = f"레벨 조정 ({i}/{len(split_files)})"
+            self._notify()
+
+            prepended = split_dir / f"{split_file.stem}_prep.pdf"
+            prepend_first_page(split_file, prepended)
+
+            leveled = split_dir / f"{split_file.stem}_lev.pdf"
+            run_levels_only(prepended, leveled, config.black_point, config.white_point)
+
+            final = split_dir / f"{split_file.stem}_final.pdf"
+            delete_first_page(leveled, final)
+            result_files.append(final)
+
+        job.current_step = "합치기"
+        self._notify()
+        merged = tmp / f"{job.book_name}.pdf"
+        merge_pdfs(result_files, merged)
+        return merged
+
+    # ── Flow 3: 고급+OCR ─────────────────────────────────────
+
+    def _flow_advanced_ocr(self, job: Job, tmp: Path, current_pdf: Path) -> Path:
+        """고급+OCR: 분할 → ABBYY 레벨+OCR → 합치기"""
+        config = job.config
+        split_dir = tmp / "adv_ocr_splits"
+        split_dir.mkdir(parents=True, exist_ok=True)
+
+        job.current_step = "분할"
+        self._notify()
+        split_files = split_pdf_by_count(current_pdf, SPLIT_PAGES, split_dir)
+
+        if len(split_files) == 1 and split_files[0] == current_pdf:
+            dest = split_dir / f"{job.book_name}.pdf"
+            shutil.copy2(current_pdf, dest)
+            split_files = [dest]
+
+        result_files = []
+        for i, split_file in enumerate(split_files, 1):
+            job.current_step = f"레벨+OCR ({i}/{len(split_files)})"
+            self._notify()
+            out = split_dir / f"{split_file.stem}_done.pdf"
+            run_levels_with_ocr(split_file, out, config.black_point, config.white_point, config.ocr_language)
+            result_files.append(out)
+
+        job.current_step = "합치기"
+        self._notify()
+        merged = tmp / f"{job.book_name}.pdf"
+        merge_pdfs(result_files, merged)
+        return merged
 
     def _create_zip(self, customer_name: str):
         """고객의 모든 완료된 책을 ZIP으로 압축 후 폴더 삭제"""
