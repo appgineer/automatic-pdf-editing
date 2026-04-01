@@ -177,11 +177,15 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
 # ── 저장 ──────────────────────────────────────────────────────
 
 def _click_file_menu():
-    """pywinauto로 ABBYY 메뉴바의 '파일(F)' 클릭"""
+    """pywinauto로 ABBYY 메뉴바의 '파일(F)' 클릭 (MenuWindow 상대 좌표)"""
     from pywinauto import Application
     app = Application(backend="uia").connect(title_re=".*FineReader.*")
     win = app.window(title_re=".*FineReader.*")
-    win.menu_select("파일(F)")
+    win.set_focus()
+    time.sleep(1)
+    menu = win.child_window(title="MenuWindow")
+    rect = menu.rectangle()
+    pyautogui.click(rect.left + 30, rect.top + 27)
     time.sleep(1)
 
 
