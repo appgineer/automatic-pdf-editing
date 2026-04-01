@@ -176,15 +176,23 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
 
 # ── 저장 ──────────────────────────────────────────────────────
 
+def _click_file_menu():
+    """pywinauto로 ABBYY 메뉴바의 '파일(F)' 클릭"""
+    from pywinauto import Application
+    app = Application(backend="uia").connect(title_re=".*FineReader.*")
+    win = app.window(title_re=".*FineReader.*")
+    win.menu_select("파일(F)")
+    time.sleep(1)
+
+
 def _save_as_image_pdf(output_path: Path):
-    """Alt+F → A → I → 저장 대화상자 → 경로 입력 → Enter"""
+    """파일(F) 메뉴 → A → I → 저장 대화상자 → 경로 입력 → Enter"""
     logger.info(f"이미지 PDF로 저장: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     _find_abbyy_window()
     time.sleep(1.5)
-    pyautogui.hotkey("alt", "shift", "f")
-    time.sleep(3)
+    _click_file_menu()
     pyautogui.press("a")
     time.sleep(1)
     pyautogui.press("i")
@@ -202,14 +210,13 @@ def _save_as_image_pdf(output_path: Path):
 
 
 def _save_as_searchable_pdf(output_path: Path):
-    """Alt+F → A → S → 저장 대화상자 → 경로 입력 → Enter"""
+    """파일(F) 메뉴 → A → S → 저장 대화상자 → 경로 입력 → Enter"""
     logger.info(f"검색 가능 PDF로 저장: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     _find_abbyy_window()
     time.sleep(1.5)
-    pyautogui.hotkey("alt", "shift", "f")
-    time.sleep(3)
+    _click_file_menu()
     pyautogui.press("a")
     time.sleep(1)
     pyautogui.press("s")
