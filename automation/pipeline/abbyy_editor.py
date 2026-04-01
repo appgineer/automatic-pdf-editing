@@ -33,15 +33,8 @@ logger = logging.getLogger(__name__)
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.3
 
-# ABBYY 편집기 바로가기 (공용 바탕화면 → 사용자 바탕화면 순서로 탐색)
-ABBYY_SHORTCUT_DIRS = [
-    r"C:\Users\Public\Desktop",
-    os.path.join(os.path.expanduser("~"), "Desktop"),
-]
-ABBYY_SHORTCUT_NAMES = [
-    "ABBYY FineReader PDF.lnk",
-    "ABBYY FineReader PDF 16.lnk",
-]
+# ABBYY OCR 편집기 실행 경로
+ABBYY_OCR_EXE = r"C:\Program Files\ABBYY FineReader 16\FineReaderOCR.exe"
 
 LOADING_POLL_INTERVAL = 0.5
 LOADING_TIMEOUT = 600  # 10분
@@ -49,39 +42,17 @@ LOADING_TIMEOUT = 600  # 10분
 
 # ── ABBYY 편집기 실행 ──────────────────────────────────────────
 
-def _find_abbyy_shortcut() -> str:
-    """ABBYY FineReader PDF 바로가기 찾기"""
-    for desktop in ABBYY_SHORTCUT_DIRS:
-        for name in ABBYY_SHORTCUT_NAMES:
-            shortcut = os.path.join(desktop, name)
-            if os.path.exists(shortcut):
-                return shortcut
+def _open_in_ocr_editor(pdf_path: Path):
+    """FineReaderOCR.exe로 PDF를 OCR 편집기에서 바로 열기"""
+    if not os.path.exists(ABBYY_OCR_EXE):
+        raise RuntimeError(f"ABBYY OCR 편집기를 찾을 수 없습니다: {ABBYY_OCR_EXE}")
 
-    raise RuntimeError("ABBYY FineReader PDF 바로가기를 찾을 수 없습니다")
-
-
-def _launch_abbyy():
-    """ABBYY FineReader PDF 편집기 실행 (바탕화면 바로가기)"""
-    shortcut = _find_abbyy_shortcut()
-    logger.info(f"ABBYY 편집기 실행: {shortcut}")
-    os.startfile(shortcut)
+    logger.info(f"OCR 편집기에서 파일 열기: {pdf_path}")
+    subprocess.Popen([ABBYY_OCR_EXE, str(pdf_path)])
 
     if not _wait_for_abbyy(timeout=30):
         raise RuntimeError("ABBYY FineReader가 실행되지 않습니다")
 
-    time.sleep(2)
-    _find_abbyy_window()
-
-
-def _open_file_in_editor(pdf_path: Path):
-    """Ctrl+R → 파일 경로 입력 → Enter"""
-    logger.info(f"편집기에서 파일 열기: {pdf_path}")
-    pyautogui.hotkey("ctrl", "r")
-    time.sleep(1)
-    pyperclip.copy(str(pdf_path))
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.3)
-    pyautogui.press("enter")
     time.sleep(3)
     _find_abbyy_window()
 
@@ -250,8 +221,7 @@ def run_levels_only(input_path: Path, output_path: Path,
     """고급만: ABBYY 편집기에서 레벨 조정 후 이미지 PDF로 저장"""
     logger.info(f"레벨 조정 시작 (고급): {input_path.name}")
 
-    _launch_abbyy()
-    _open_file_in_editor(input_path)
+    _open_in_ocr_editor(input_path)
     _enter_image_editor()
     _apply_levels(black_point, white_point)
     _wait_for_processing()
@@ -271,8 +241,7 @@ def run_levels_with_ocr(input_path: Path, output_path: Path,
 
     logger.info(f"레벨+OCR 시작 (고급+OCR): {input_path.name}")
 
-    _launch_abbyy()
-    _open_file_in_editor(input_path)
+    _open_in_ocr_editor(input_path)
     _set_language(languages)
     _enter_image_editor()
     _apply_levels(black_point, white_point)
