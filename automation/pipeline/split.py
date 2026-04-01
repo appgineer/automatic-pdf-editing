@@ -27,7 +27,7 @@ def split_pdf_by_count(input_path: Path, max_pages: int, output_dir: Path, suffi
 
         out_name = f"{stem}{suffix}{part}.pdf"
         out_path = output_dir / out_name
-        part_doc.save(str(out_path))
+        part_doc.save(str(out_path), garbage=4, deflate=True)
         part_doc.close()
         del part_doc
         results.append(out_path)
@@ -59,7 +59,7 @@ def split_pdf_by_page_ranges(input_path: Path, ranges_str: str, output_dir: Path
 
         out_name = f"{stem}{idx}.pdf"
         out_path = output_dir / out_name
-        part_doc.save(str(out_path))
+        part_doc.save(str(out_path), garbage=4, deflate=True)
         part_doc.close()
         del part_doc
         results.append(out_path)
