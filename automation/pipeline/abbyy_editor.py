@@ -43,17 +43,33 @@ LOADING_TIMEOUT = 600  # 10분
 # ── ABBYY 편집기 실행 ──────────────────────────────────────────
 
 def _open_in_ocr_editor(pdf_path: Path):
-    """FineReaderOCR.exe로 PDF를 OCR 편집기에서 바로 열기"""
+    """FineReaderOCR.exe로 PDF를 OCR 편집기에서 바로 열기
+
+    창 제목에 파일명이 나타날 때까지 대기하여 파일이 완전히 로드된 후 진행.
+    """
     if not os.path.exists(ABBYY_OCR_EXE):
         raise RuntimeError(f"ABBYY OCR 편집기를 찾을 수 없습니다: {ABBYY_OCR_EXE}")
 
     logger.info(f"OCR 편집기에서 파일 열기: {pdf_path}")
     subprocess.Popen([ABBYY_OCR_EXE, str(pdf_path)])
 
-    if not _wait_for_abbyy(timeout=30):
+    if not _wait_for_abbyy(timeout=60):
         raise RuntimeError("ABBYY FineReader가 실행되지 않습니다")
 
-    time.sleep(3)
+    # 창 제목에 파일명이 나타날 때까지 대기 (파일 로드 완료 감지)
+    import pygetwindow as gw
+    file_stem = pdf_path.stem
+    start = time.time()
+    while time.time() - start < 120:
+        for win in gw.getAllWindows():
+            if file_stem in win.title:
+                logger.info(f"파일 로드 완료: '{win.title}'")
+                time.sleep(2)
+                _find_abbyy_window()
+                return
+        time.sleep(1)
+
+    logger.warning("파일명이 창 제목에 나타나지 않음 - 계속 진행")
     _find_abbyy_window()
 
 
