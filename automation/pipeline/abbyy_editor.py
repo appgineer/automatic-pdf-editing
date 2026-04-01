@@ -60,7 +60,7 @@ def _open_in_ocr_editor(pdf_path: Path):
     import pygetwindow as gw
     file_stem = pdf_path.stem
     start = time.time()
-    while time.time() - start < 120:
+    while time.time() - start < 20:
         for win in gw.getAllWindows():
             if file_stem in win.title:
                 logger.info(f"파일 로드 완료: '{win.title}'")
@@ -78,7 +78,7 @@ def _open_in_ocr_editor(pdf_path: Path):
 def _enter_image_editor():
     """Ctrl+I → 이미지 편집기 모드 진입"""
     pyautogui.hotkey("ctrl", "i")
-    time.sleep(1)
+    time.sleep(10)
 
 
 def _apply_levels(black_point: int, white_point: int):
@@ -89,46 +89,46 @@ def _apply_levels(black_point: int, white_point: int):
     logger.info(f"레벨 조정: black={black_point}, white={white_point}")
 
     pyautogui.press("l")
-    time.sleep(0.5)
+    time.sleep(3)
 
     # Tab 1번 → black_point 붙여넣기
     pyautogui.press("tab")
-    time.sleep(0.1)
+    time.sleep(3)
     pyperclip.copy(str(black_point))
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.1)
+    time.sleep(3)
     pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.2)
+    time.sleep(3)
 
     # Tab 2번 → white_point 붙여넣기
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(3)
     pyperclip.copy(str(white_point))
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.1)
+    time.sleep(3)
     pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.2)
+    time.sleep(3)
 
     # Tab 4번 → Down 3번
     for _ in range(4):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(3)
     for _ in range(3):
         pyautogui.press("down")
-        time.sleep(0.1)
+        time.sleep(3)
 
     # Enter → P → P → Enter(확인) → Enter
     pyautogui.press("enter")
-    time.sleep(0.3)
+    time.sleep(3)
     pyautogui.press("p")
-    time.sleep(0.3)
+    time.sleep(3)
     pyautogui.press("p")
-    time.sleep(0.3)
+    time.sleep(3)
     pyautogui.press("enter")
-    time.sleep(0.3)
+    time.sleep(3)
     pyautogui.press("enter")
-    time.sleep(0.5)
+    time.sleep(3)
 
 
 def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
