@@ -33,11 +33,14 @@ logger = logging.getLogger(__name__)
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.3
 
-# ABBYY 편집기 실행 경로 (설치 환경에 따라 조정)
-ABBYY_EXE_PATHS = [
-    r"C:\Program Files\ABBYY FineReader 16\FineReader.exe",
-    r"C:\Program Files\ABBYY FineReader PDF 16\FineReader.exe",
-    r"C:\Program Files (x86)\ABBYY FineReader PDF 16\FineReader.exe",
+# ABBYY 편집기 바로가기 (공용 바탕화면 → 사용자 바탕화면 순서로 탐색)
+ABBYY_SHORTCUT_DIRS = [
+    r"C:\Users\Public\Desktop",
+    os.path.join(os.path.expanduser("~"), "Desktop"),
+]
+ABBYY_SHORTCUT_NAMES = [
+    "ABBYY FineReader PDF.lnk",
+    "ABBYY FineReader PDF 16.lnk",
 ]
 
 LOADING_POLL_INTERVAL = 0.5
@@ -46,31 +49,22 @@ LOADING_TIMEOUT = 600  # 10분
 
 # ── ABBYY 편집기 실행 ──────────────────────────────────────────
 
-def _find_abbyy_exe() -> str:
-    """ABBYY 실행 파일 경로 찾기"""
-    for path in ABBYY_EXE_PATHS:
-        if os.path.exists(path):
-            return path
+def _find_abbyy_shortcut() -> str:
+    """ABBYY FineReader PDF 바로가기 찾기"""
+    for desktop in ABBYY_SHORTCUT_DIRS:
+        for name in ABBYY_SHORTCUT_NAMES:
+            shortcut = os.path.join(desktop, name)
+            if os.path.exists(shortcut):
+                return shortcut
 
-    # 바탕화면 바로가기 시도
-    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-    for name in ["ABBYY FineReader PDF 16.lnk", "ABBYY FineReader.lnk"]:
-        shortcut = os.path.join(desktop, name)
-        if os.path.exists(shortcut):
-            return shortcut
-
-    raise RuntimeError("ABBYY FineReader PDF 16 실행 파일을 찾을 수 없습니다")
+    raise RuntimeError("ABBYY FineReader PDF 바로가기를 찾을 수 없습니다")
 
 
 def _launch_abbyy():
-    """ABBYY FineReader PDF 16 프로그램 실행"""
-    exe_path = _find_abbyy_exe()
-    logger.info(f"ABBYY 편집기 실행: {exe_path}")
-
-    if exe_path.endswith(".lnk"):
-        os.startfile(exe_path)
-    else:
-        subprocess.Popen([exe_path])
+    """ABBYY FineReader PDF 편집기 실행 (바탕화면 바로가기)"""
+    shortcut = _find_abbyy_shortcut()
+    logger.info(f"ABBYY 편집기 실행: {shortcut}")
+    os.startfile(shortcut)
 
     if not _wait_for_abbyy(timeout=30):
         raise RuntimeError("ABBYY FineReader가 실행되지 않습니다")
