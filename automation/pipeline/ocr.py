@@ -178,21 +178,28 @@ def _save_as_searchable_pdf(output_path: Path):
 def _close_abbyy(timeout: int = 15):
     """ABBYY 프로세스 모두 종료 후 완전 종료 확인"""
     import subprocess
-    try:
-        subprocess.run(["taskkill", "/F", "/T", "/IM", "FineReader.exe"], capture_output=True)
-        logger.info("ABBYY 프로세스 종료 명령 실행")
-    except Exception as e:
-        logger.warning(f"ABBYY 종료 실패: {e}")
-        return
 
-    # 프로세스가 완전히 종료될 때까지 폴링
+    # FineReaderOCR.exe와 FineReader.exe 모두 종료
+    for exe in ("FineReaderOCR.exe", "FineReader.exe"):
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/IM", exe], capture_output=True)
+            logger.info(f"{exe} 종료 명령 실행")
+        except Exception as e:
+            logger.warning(f"{exe} 종료 실패: {e}")
+
+    # 두 프로세스 모두 완전히 종료될 때까지 폴링
     start = time.time()
     while time.time() - start < timeout:
-        result = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq FineReader.exe"],
-            capture_output=True, text=True
-        )
-        if "FineReader.exe" not in result.stdout:
+        still_running = False
+        for exe in ("FineReaderOCR.exe", "FineReader.exe"):
+            result = subprocess.run(
+                ["tasklist", "/FI", f"IMAGENAME eq {exe}"],
+                capture_output=True, text=True
+            )
+            if exe in result.stdout:
+                still_running = True
+                break
+        if not still_running:
             logger.info("ABBYY 프로세스 완전 종료 확인")
             time.sleep(1)
             return
