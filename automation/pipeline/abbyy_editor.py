@@ -89,46 +89,46 @@ def _apply_levels(black_point: int, white_point: int):
     logger.info(f"레벨 조정: black={black_point}, white={white_point}")
 
     pyautogui.press("l")
-    time.sleep(3)
+    time.sleep(1.5)
 
     # Tab 1번 → black_point 붙여넣기
     pyautogui.press("tab")
-    time.sleep(3)
+    time.sleep(1.5)
     pyperclip.copy(str(black_point))
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(3)
+    time.sleep(1.5)
     pyautogui.hotkey("ctrl", "v")
-    time.sleep(3)
+    time.sleep(1.5)
 
     # Tab 2번 → white_point 붙여넣기
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(3)
+        time.sleep(1.5)
     pyperclip.copy(str(white_point))
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(3)
+    time.sleep(1.5)
     pyautogui.hotkey("ctrl", "v")
-    time.sleep(3)
+    time.sleep(1.5)
 
     # Tab 4번 → Down 3번
     for _ in range(4):
         pyautogui.press("tab")
-        time.sleep(3)
+        time.sleep(1.5)
     for _ in range(3):
         pyautogui.press("down")
-        time.sleep(3)
+        time.sleep(1.5)
 
     # Enter → P → P → Enter(확인) → Enter
     pyautogui.press("enter")
-    time.sleep(3)
+    time.sleep(1.5)
     pyautogui.press("p")
-    time.sleep(3)
+    time.sleep(1.5)
     pyautogui.press("p")
-    time.sleep(3)
+    time.sleep(1.5)
     pyautogui.press("enter")
-    time.sleep(3)
+    time.sleep(1.5)
     pyautogui.press("enter")
-    time.sleep(3)
+    time.sleep(1.5)
 
 
 def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
