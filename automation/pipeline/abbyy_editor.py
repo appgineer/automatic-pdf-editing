@@ -30,7 +30,7 @@ from automation.pipeline.ocr import (
 
 logger = logging.getLogger(__name__)
 
-pyautogui.FAILSAFE = True
+pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.3
 
 # ABBYY OCR 편집기 실행 경로
