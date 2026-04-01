@@ -224,6 +224,8 @@ def _save_as_searchable_pdf(output_path: Path):
     pyautogui.press("a")
     time.sleep(1)
     pyautogui.press("s")
+    time.sleep(3)
+    pyautogui.press("enter")  # OCR 안내창 닫기
     time.sleep(1.5)
 
     pyperclip.copy(str(output_path))
