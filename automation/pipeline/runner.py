@@ -224,8 +224,9 @@ class PipelineRunner:
 
         all_files = list(customer_dir.rglob("*.pdf"))
         if all_files:
-            create_customer_zip(customer_name, all_files, self.output_folder)
-            logger.info(f"ZIP 생성: {customer_name} 님.zip")
+            zip_paths = create_customer_zip(customer_name, all_files, self.output_folder)
+            for zp in zip_paths:
+                logger.info(f"ZIP 생성: {zp.name}")
 
             # ZIP 생성 후 고객 폴더 삭제 (ZIP만 남김)
             shutil.rmtree(customer_dir, ignore_errors=True)
