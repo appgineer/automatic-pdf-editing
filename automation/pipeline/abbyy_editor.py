@@ -177,10 +177,12 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
 # ── 저장 ──────────────────────────────────────────────────────
 
 def _click_file_menu():
-    """Alt+F로 파일 메뉴 열기"""
+    """F10 → Enter로 파일 메뉴 열기"""
     _find_abbyy_window()
     time.sleep(1)
-    pyautogui.hotkey("alt", "f")
+    pyautogui.press("f10")
+    time.sleep(1)
+    pyautogui.press("enter")
     time.sleep(1)
 
 
