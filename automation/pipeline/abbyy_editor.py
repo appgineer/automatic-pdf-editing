@@ -177,19 +177,11 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
 # ── 저장 ──────────────────────────────────────────────────────
 
 def _click_file_menu():
-    """F10 → Enter로 파일 메뉴 열기"""
-    import pygetwindow as gw
-    for win in gw.getAllWindows():
-        if "FineReader" in win.title:
-            if win.isMinimized:
-                win.restore()
-                time.sleep(0.5)
-            win.activate()
-            time.sleep(0.5)
-            # 창 중앙 클릭으로 확실히 포커스 잡기
-            pyautogui.click(win.left + win.width // 2, win.top + win.height // 2)
-            time.sleep(1)
-            break
+    """Escape로 이미지 편집기 모드 해제 후 F10 → Enter로 파일 메뉴 열기"""
+    _find_abbyy_window()
+    time.sleep(1)
+    pyautogui.press("escape")
+    time.sleep(1)
     pyautogui.press("f10")
     time.sleep(1)
     pyautogui.press("enter")
