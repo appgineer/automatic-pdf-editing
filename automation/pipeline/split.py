@@ -1,6 +1,7 @@
 """PDF 분할"""
 
 import gc
+import shutil
 from pathlib import Path
 import fitz
 
@@ -80,11 +81,15 @@ def split_pdf_by_page_ranges(input_path: Path, ranges_str: str, output_dir: Path
 def split_pdf_by_size(input_path: Path, max_size_mb: int, output_dir: Path) -> list[Path]:
     """파일 크기 기준 분할 (페이지별 개별 측정 후 누적)"""
     if max_size_mb <= 0:
-        return [input_path]
+        out_path = output_dir / input_path.name
+        shutil.copy2(input_path, out_path)
+        return [out_path]
 
     max_size = max_size_mb * 1024 * 1024
     if input_path.stat().st_size <= max_size:
-        return [input_path]
+        out_path = output_dir / input_path.name
+        shutil.copy2(input_path, out_path)
+        return [out_path]
 
     doc = fitz.open(input_path)
     total = len(doc)
