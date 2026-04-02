@@ -71,22 +71,53 @@ def split_pdf_by_page_ranges(input_path: Path, ranges_str: str, output_dir: Path
 
 
 def split_pdf_by_size(input_path: Path, max_size_mb: int, output_dir: Path) -> list[Path]:
-    """파일 크기 기준 분할 (대략적)"""
+    """파일 크기 기준 분할 (페이지별 개별 측정 후 누적)"""
     if max_size_mb <= 0:
         return [input_path]
 
-    file_size_mb = input_path.stat().st_size / (1024 * 1024)
-    if file_size_mb <= max_size_mb:
+    max_size = max_size_mb * 1024 * 1024
+    if input_path.stat().st_size <= max_size:
         return [input_path]
 
     doc = fitz.open(input_path)
     total = len(doc)
 
-    # 페이지당 평균 크기로 분할 페이지 수 추정 (5MB 여유)
-    effective_max = max(1, max_size_mb - 5)
-    pages_per_part = max(1, int(total * effective_max / file_size_mb))
+    # 1단계: 각 페이지 크기 개별 측정
+    page_sizes = []
+    for i in range(total):
+        tmp_doc = fitz.open()
+        tmp_doc.insert_pdf(doc, from_page=i, to_page=i)
+        page_sizes.append(len(tmp_doc.tobytes(garbage=4, deflate=True)))
+        tmp_doc.close()
+        del tmp_doc
+
+    # 2단계: 누적 합산으로 분할 지점 결정
+    stem = input_path.stem
+    results = []
+    part = 1
+    start = 0
+
+    while start < total:
+        current_size = 0
+        end = start
+        while end < total:
+            if current_size + page_sizes[end] > max_size and end > start:
+                break
+            current_size += page_sizes[end]
+            end += 1
+
+        part_doc = fitz.open()
+        part_doc.insert_pdf(doc, from_page=start, to_page=end - 1)
+        out_path = output_dir / f"{stem}{part}.pdf"
+        part_doc.save(str(out_path), garbage=4, deflate=True)
+        part_doc.close()
+        del part_doc
+        results.append(out_path)
+
+        start = end
+        part += 1
 
     doc.close()
     del doc
     gc.collect()
-    return split_pdf_by_count(input_path, pages_per_part, output_dir, suffix="")
+    return results
