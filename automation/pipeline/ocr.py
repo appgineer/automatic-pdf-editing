@@ -223,17 +223,18 @@ def run_ocr(input_path: Path, output_path: Path, languages: list[str] | str = "K
 
     logger.info(f"OCR 시작: {input_path.name} (언어: {languages})")
 
-    # 1. 파일 직접 열기 → ABBYY OCR 편집기
-    _open_file(input_path)
+    try:
+        # 1. 파일 직접 열기 → ABBYY OCR 편집기
+        _open_file(input_path)
 
-    # 2. 언어 설정
-    _set_language(languages)
+        # 2. 언어 설정
+        _set_language(languages)
 
-    # 3. 다른 이름으로 저장 (출력폴더/사람이름/책이름/파일명_OCR.pdf)
-    _save_as_searchable_pdf(output_path)
-
-    # 4. ABBYY 종료
-    _close_abbyy()
+        # 3. 다른 이름으로 저장 (출력폴더/사람이름/책이름/파일명_OCR.pdf)
+        _save_as_searchable_pdf(output_path)
+    finally:
+        # 4. ABBYY 종료 (에러 발생해도 반드시 종료)
+        _close_abbyy()
 
     logger.info(f"OCR 완료: {output_path.name}")
     return output_path

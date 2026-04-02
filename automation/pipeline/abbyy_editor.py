@@ -177,15 +177,10 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
 # ── 저장 ──────────────────────────────────────────────────────
 
 def _click_file_menu():
-    """pywinauto로 ABBYY 메뉴바의 '파일(F)' 클릭 (MenuWindow 상대 좌표)"""
-    from pywinauto import Application
-    app = Application(backend="uia").connect(title_re=".*FineReader.*")
-    win = app.window(title_re=".*FineReader.*")
-    win.set_focus()
+    """Alt+F로 파일 메뉴 열기"""
+    _find_abbyy_window()
     time.sleep(1)
-    menu = win.child_window(title="MenuWindow")
-    rect = menu.rectangle()
-    pyautogui.click(rect.left + 30, rect.top + 27)
+    pyautogui.hotkey("alt", "f")
     time.sleep(1)
 
 
@@ -246,12 +241,14 @@ def run_levels_only(input_path: Path, output_path: Path,
     """고급만: ABBYY 편집기에서 레벨 조정 후 이미지 PDF로 저장"""
     logger.info(f"레벨 조정 시작 (고급): {input_path.name}")
 
-    _open_in_ocr_editor(input_path)
-    _enter_image_editor()
-    _apply_levels(black_point, white_point)
-    _wait_for_processing()
-    _save_as_image_pdf(output_path)
-    _close_abbyy()
+    try:
+        _open_in_ocr_editor(input_path)
+        _enter_image_editor()
+        _apply_levels(black_point, white_point)
+        _wait_for_processing()
+        _save_as_image_pdf(output_path)
+    finally:
+        _close_abbyy()
 
     logger.info(f"레벨 조정 완료: {output_path.name}")
     return output_path
@@ -266,13 +263,15 @@ def run_levels_with_ocr(input_path: Path, output_path: Path,
 
     logger.info(f"레벨+OCR 시작 (고급+OCR): {input_path.name}")
 
-    _open_in_ocr_editor(input_path)
-    _set_language(languages)
-    _enter_image_editor()
-    _apply_levels(black_point, white_point)
-    _wait_for_processing()
-    _save_as_searchable_pdf(output_path)
-    _close_abbyy()
+    try:
+        _open_in_ocr_editor(input_path)
+        _set_language(languages)
+        _enter_image_editor()
+        _apply_levels(black_point, white_point)
+        _wait_for_processing()
+        _save_as_searchable_pdf(output_path)
+    finally:
+        _close_abbyy()
 
     logger.info(f"레벨+OCR 완료: {output_path.name}")
     return output_path
