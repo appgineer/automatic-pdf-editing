@@ -45,6 +45,7 @@ def split_pdf_by_page_ranges(input_path: Path, ranges_str: str, output_dir: Path
         return [input_path]
 
     doc = fitz.open(input_path)
+    total = len(doc)
     stem = input_path.stem
     results = []
 
@@ -53,6 +54,12 @@ def split_pdf_by_page_ranges(input_path: Path, ranges_str: str, output_dir: Path
         parts = page_range.split("-")
         start = int(parts[0]) - 1  # 0-indexed
         end = int(parts[1]) if len(parts) > 1 else int(parts[0])
+
+        # 시작점이 총 페이지 이상이면 건너뛰기
+        if start >= total:
+            continue
+        # 끝점이 총 페이지를 넘으면 총 페이지까지만
+        end = min(end, total)
 
         part_doc = fitz.open()
         part_doc.insert_pdf(doc, from_page=start, to_page=end - 1)
