@@ -8,15 +8,27 @@ PROJECT_DIR = Path(__file__).parent
 REQUIREMENTS = PROJECT_DIR / "requirements.txt"
 
 
+IMPORT_NAME_MAP = {
+    "PyMuPDF": "fitz",
+    "Pillow": "PIL",
+    "PyGetWindow": "pygetwindow",
+}
+
+
 def ensure_dependencies():
-    """최초 실행 시 라이브러리가 없으면 자동 설치"""
-    try:
-        import fitz  # noqa: F401
-        import PIL  # noqa: F401
-        import pyautogui  # noqa: F401
-        import pyperclip  # noqa: F401
-        import pygetwindow  # noqa: F401
-    except ImportError:
+    """최초 실행 시 requirements.txt 기반으로 미설치 라이브러리 자동 감지 및 설치"""
+    missing = False
+    for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+        pkg = line.split(">")[0].split("=")[0].strip()
+        if not pkg:
+            continue
+        import_name = IMPORT_NAME_MAP.get(pkg, pkg.lower().replace("-", "_"))
+        try:
+            __import__(import_name)
+        except ImportError:
+            missing = True
+            break
+    if missing:
         print("[초기 설정] 필요한 라이브러리를 설치합니다...")
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS)],
