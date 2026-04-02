@@ -100,20 +100,33 @@ class PipelineRunner:
         elif config.ocr:
             current_pdf = self._flow_standard_ocr(job, tmp, current_pdf)
 
+        # --- 파일명 접미사 조합 ---
+        suffix = ""
+        if config.scan_type == "고급":
+            suffix += "_고급"
+        if config.ocr:
+            suffix += "_OCR"
+        final_stem = f"{job.book_name}{suffix}"
+
         # --- 최종 출력 ---
         output_dir = self.output_folder / job.customer_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        if config.is_split and config.split_method == "page" and config.split_page_ranges:
-            job.current_step = "페이지 범위 분할"
-            self._notify()
-            split_pdf_by_page_ranges(current_pdf, config.split_page_ranges, output_dir)
-        elif config.is_split and config.split_method == "size" and config.split_size_mb > 0:
-            job.current_step = "크기 기준 분할"
-            self._notify()
-            split_pdf_by_size(current_pdf, config.split_size_mb, output_dir)
+        if config.is_split and (config.split_method == "page" or config.split_method == "size"):
+            # 분할 함수가 stem 기반으로 파일명을 만들므로 접미사 포함된 이름으로 복사
+            named_pdf = tmp / f"{final_stem}.pdf"
+            shutil.copy2(current_pdf, named_pdf)
+
+            if config.split_method == "page" and config.split_page_ranges:
+                job.current_step = "페이지 범위 분할"
+                self._notify()
+                split_pdf_by_page_ranges(named_pdf, config.split_page_ranges, output_dir)
+            elif config.split_method == "size" and config.split_size_mb > 0:
+                job.current_step = "크기 기준 분할"
+                self._notify()
+                split_pdf_by_size(named_pdf, config.split_size_mb, output_dir)
         else:
-            final_path = output_dir / f"{job.book_name}.pdf"
+            final_path = output_dir / f"{final_stem}.pdf"
             shutil.copy2(current_pdf, final_path)
 
     # ── Flow 1: 일반+OCR ─────────────────────────────────────
