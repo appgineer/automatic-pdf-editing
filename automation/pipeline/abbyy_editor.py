@@ -131,8 +131,13 @@ def _apply_levels(black_point: int, white_point: int):
     time.sleep(1.5)
 
 
-def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
-    """'이미지를 처리하는 중' 창이 나타났다가 사라질 때까지 대기"""
+def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 15):
+    """'이미지를 처리하는 중' 창이 나타났다가 사라질 때까지 대기
+
+    Args:
+        timeout: 처리 완료 대기 최대 시간 (기본 10분)
+        detect_timeout: 로딩 창 감지 대기 시간 (기본 15초, 짧게 끝나면 로딩 창이 안 뜸)
+    """
     import pygetwindow as gw
 
     LOADING_TITLE = "이미지를 처리하는 중"
@@ -140,9 +145,9 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
     logger.info("레벨 처리 완료 대기중...")
     start = time.time()
 
-    # Phase 1: '이미지를 처리하는 중' 창이 나타날 때까지 대기
+    # Phase 1: '이미지를 처리하는 중' 창이 나타날 때까지 대기 (짧은 타임아웃)
     loading_appeared = False
-    while time.time() - start < timeout:
+    while time.time() - start < detect_timeout:
         for win in gw.getAllWindows():
             if LOADING_TITLE in win.title:
                 loading_appeared = True
@@ -153,8 +158,9 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT):
         time.sleep(LOADING_POLL_INTERVAL)
 
     if not loading_appeared:
-        logger.warning("로딩 창 미감지 - 이미 완료되었을 수 있음")
+        logger.info("로딩 창 미감지 - 이미 완료된 것으로 판단")
         time.sleep(3)
+        _find_abbyy_window()
         return
 
     # Phase 2: '이미지를 처리하는 중' 창이 사라질 때까지 대기
