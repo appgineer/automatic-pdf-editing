@@ -193,35 +193,33 @@ def _detect_save_dialog(timeout: int = 3) -> bool:
     return False
 
 
-def _open_save_dialog(file_type_index: int, max_retries: int = 3):
-    """Ctrl+S로 저장 대화상자를 열고 파일 형식 선택
+def _open_save_dialog(output_path: Path, file_type_index: int):
+    """Ctrl+S로 저장 대화상자를 열고 경로 입력 + 파일 형식 선택
 
     Args:
+        output_path: 저장할 파일 경로
         file_type_index: 파일 형식 드롭다운 인덱스 (1-based, 위에서부터)
             5 = 검색 가능한 PDF 문서
             6 = 이미지 전용 PDF 문서
-        max_retries: 최대 재시도 횟수
     """
-    for attempt in range(1, max_retries + 1):
-        _find_abbyy_window()
-        time.sleep(1)
-        pyautogui.press("escape")  # 이미지 편집기 모드 해제
-        time.sleep(1)
-        pyautogui.hotkey("ctrl", "s")
-        time.sleep(2)
+    _find_abbyy_window()
+    time.sleep(1)
+    pyautogui.press("escape")  # 이미지 편집기 모드 해제
+    time.sleep(1)
+    pyautogui.hotkey("ctrl", "s")
+    time.sleep(2)
 
-        if _detect_save_dialog():
-            logger.info(f"저장 대화상자 감지 (시도 {attempt})")
-            break
+    if not _detect_save_dialog():
+        raise RuntimeError("저장 대화상자 열기 실패")
+    logger.info("저장 대화상자 감지")
 
-        logger.warning(f"저장 대화상자 미감지 (시도 {attempt}/{max_retries})")
-        pyautogui.press("escape")
-        time.sleep(1)
-    else:
-        raise RuntimeError(f"저장 대화상자 열기 실패 ({max_retries}회 시도)")
+    # 경로 입력 (파일 이름이 전체 선택 상태)
+    pyperclip.copy(str(output_path))
+    pyautogui.hotkey("ctrl", "v")
+    time.sleep(1.5)
 
-    # 파일 형식 선택: Alt+T → Home → Down (index-1)번
-    pyautogui.hotkey("alt", "t")
+    # 파일 형식 선택: Alt+Shift+T → Home → Down (index-1)번
+    pyautogui.hotkey("alt", "shift", "t")
     time.sleep(0.5)
     pyautogui.press("home")
     time.sleep(0.3)
@@ -233,17 +231,11 @@ def _open_save_dialog(file_type_index: int, max_retries: int = 3):
 
 
 def _save_as_image_pdf(output_path: Path):
-    """Ctrl+S → 이미지 전용 PDF 선택 → 경로 입력 → 저장"""
+    """Ctrl+S → 경로 입력 → 이미지 전용 PDF 선택 → 저장"""
     logger.info(f"이미지 PDF로 저장: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    _open_save_dialog(file_type_index=6)  # 이미지 전용 PDF 문서
-
-    pyperclip.copy(str(output_path))
-    pyautogui.hotkey("ctrl", "a")
-    time.sleep(1.5)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(1.5)
+    _open_save_dialog(output_path, file_type_index=6)  # 이미지 전용 PDF 문서
     pyautogui.press("enter")
 
     _wait_for_file_complete(output_path)
@@ -251,17 +243,11 @@ def _save_as_image_pdf(output_path: Path):
 
 
 def _save_as_searchable_pdf(output_path: Path):
-    """Ctrl+S → 검색 가능한 PDF 선택 → 경로 입력 → 저장"""
+    """Ctrl+S → 경로 입력 → 검색 가능한 PDF 선택 → 저장"""
     logger.info(f"검색 가능 PDF로 저장: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    _open_save_dialog(file_type_index=5)  # 검색 가능한 PDF 문서
-
-    pyperclip.copy(str(output_path))
-    pyautogui.hotkey("ctrl", "a")
-    time.sleep(1.5)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(1.5)
+    _open_save_dialog(output_path, file_type_index=5)  # 검색 가능한 PDF 문서
     pyautogui.press("enter")
     time.sleep(2)
     pyautogui.press("enter")  # OCR 안내창 닫기
