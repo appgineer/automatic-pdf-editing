@@ -8,7 +8,7 @@ ABBYY 편집기를 실행하여 이미지 레벨 조정 후 저장.
 2. Ctrl+R → 파일 경로 입력 → Enter
 3. (OCR인 경우) Ctrl+. → 언어 설정
 4. Ctrl+I → 이미지 편집기 → L → 레벨 조정
-5. Alt+F → A → I(이미지) 또는 S(검색가능) 저장
+5. Ctrl+S → 저장 대화상자 → 파일 형식 선택 → 저장
 """
 
 import os
@@ -131,12 +131,12 @@ def _apply_levels(black_point: int, white_point: int):
     time.sleep(1.5)
 
 
-def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 45):
+def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 60):
     """'이미지를 처리하는 중' 창이 나타났다가 사라질 때까지 대기
 
     Args:
         timeout: 처리 완료 대기 최대 시간 (기본 10분)
-        detect_timeout: 로딩 창 감지 대기 시간 (기본 15초, 짧게 끝나면 로딩 창이 안 뜸)
+        detect_timeout: 로딩 창 감지 대기 시간 (기본 60초, 짧게 끝나면 로딩 창이 안 뜸)
     """
     import pygetwindow as gw
 
@@ -159,7 +159,6 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 4
 
     if not loading_appeared:
         logger.info("로딩 창 미감지 - 이미 완료된 것으로 판단")
-        time.sleep(3)
         _find_abbyy_window()
         return
 
@@ -182,30 +181,63 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 4
 
 # ── 저장 ──────────────────────────────────────────────────────
 
-def _click_file_menu():
-    """Escape로 이미지 편집기 모드 해제 후 F10 → Enter로 파일 메뉴 열기"""
-    _find_abbyy_window()
-    time.sleep(1)
-    pyautogui.press("escape")
-    time.sleep(1)
-    pyautogui.press("f10")
-    time.sleep(1)
+def _detect_save_dialog(timeout: int = 3) -> bool:
+    """'문서를 다른 이름으로 저장' 대화상자 감지"""
+    import pygetwindow as gw
+    start = time.time()
+    while time.time() - start < timeout:
+        for win in gw.getAllWindows():
+            if "저장" in win.title:
+                return True
+        time.sleep(0.5)
+    return False
+
+
+def _open_save_dialog(file_type_index: int, max_retries: int = 3):
+    """Ctrl+S로 저장 대화상자를 열고 파일 형식 선택
+
+    Args:
+        file_type_index: 파일 형식 드롭다운 인덱스 (1-based, 위에서부터)
+            5 = 검색 가능한 PDF 문서
+            6 = 이미지 전용 PDF 문서
+        max_retries: 최대 재시도 횟수
+    """
+    for attempt in range(1, max_retries + 1):
+        _find_abbyy_window()
+        time.sleep(1)
+        pyautogui.press("escape")  # 이미지 편집기 모드 해제
+        time.sleep(1)
+        pyautogui.hotkey("ctrl", "s")
+        time.sleep(2)
+
+        if _detect_save_dialog():
+            logger.info(f"저장 대화상자 감지 (시도 {attempt})")
+            break
+
+        logger.warning(f"저장 대화상자 미감지 (시도 {attempt}/{max_retries})")
+        pyautogui.press("escape")
+        time.sleep(1)
+    else:
+        raise RuntimeError(f"저장 대화상자 열기 실패 ({max_retries}회 시도)")
+
+    # 파일 형식 선택: Alt+T → Home → Down (index-1)번
+    pyautogui.hotkey("alt", "t")
+    time.sleep(0.5)
+    pyautogui.press("home")
+    time.sleep(0.3)
+    for _ in range(file_type_index - 1):
+        pyautogui.press("down")
+        time.sleep(0.1)
     pyautogui.press("enter")
-    time.sleep(1)
+    time.sleep(0.5)
 
 
 def _save_as_image_pdf(output_path: Path):
-    """파일(F) 메뉴 → A → I → 저장 대화상자 → 경로 입력 → Enter"""
+    """Ctrl+S → 이미지 전용 PDF 선택 → 경로 입력 → 저장"""
     logger.info(f"이미지 PDF로 저장: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    _find_abbyy_window()
-    time.sleep(1.5)
-    _click_file_menu()
-    pyautogui.press("a")
-    time.sleep(1)
-    pyautogui.press("i")
-    time.sleep(1.5)
+    _open_save_dialog(file_type_index=6)  # 이미지 전용 PDF 문서
 
     pyperclip.copy(str(output_path))
     pyautogui.hotkey("ctrl", "a")
@@ -219,17 +251,11 @@ def _save_as_image_pdf(output_path: Path):
 
 
 def _save_as_searchable_pdf(output_path: Path):
-    """파일(F) 메뉴 → A → S → 저장 대화상자 → 경로 입력 → Enter"""
+    """Ctrl+S → 검색 가능한 PDF 선택 → 경로 입력 → 저장"""
     logger.info(f"검색 가능 PDF로 저장: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    _find_abbyy_window()
-    time.sleep(1.5)
-    _click_file_menu()
-    pyautogui.press("a")
-    time.sleep(1)
-    pyautogui.press("s")
-    time.sleep(2)
+    _open_save_dialog(file_type_index=5)  # 검색 가능한 PDF 문서
 
     pyperclip.copy(str(output_path))
     pyautogui.hotkey("ctrl", "a")
