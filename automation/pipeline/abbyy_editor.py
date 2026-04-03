@@ -219,7 +219,7 @@ def _open_save_dialog(output_path: Path, file_type_index: int):
     time.sleep(1)
 
     # 파일 형식 선택: Alt+Shift+T → Down(드롭다운 열기) → Up 15번(맨 위) → Down (index-1)번
-    pyautogui.hotkey("alt", "shift", "t")
+    pyautogui.press("tab")
     time.sleep(1)
     pyautogui.press("down")
     time.sleep(1)
