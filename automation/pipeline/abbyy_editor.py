@@ -222,8 +222,7 @@ def _open_save_dialog(output_path: Path, file_type_index: int):
     pyautogui.hotkey("alt", "shift", "t")
     time.sleep(1)
     pyautogui.press("down")
-    for _ in range(15):
-        pyautogui.press("up")
+    pyautogui.press("home")
     for _ in range(file_type_index - 1):
         pyautogui.press("down")
     pyautogui.press("enter")
