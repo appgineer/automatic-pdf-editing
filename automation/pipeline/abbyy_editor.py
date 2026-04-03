@@ -216,18 +216,18 @@ def _open_save_dialog(output_path: Path, file_type_index: int):
     # 경로 입력 (파일 이름이 전체 선택 상태)
     pyperclip.copy(str(output_path))
     pyautogui.hotkey("ctrl", "v")
-    time.sleep(1.5)
+    time.sleep(1)
 
-    # 파일 형식 선택: Alt+Shift+T → Home → Down (index-1)번
+    # 파일 형식 선택: Alt+Shift+T → Down(드롭다운 열기) → Up 15번(맨 위) → Down (index-1)번
     pyautogui.hotkey("alt", "shift", "t")
-    time.sleep(0.5)
-    pyautogui.press("home")
-    time.sleep(0.3)
+    time.sleep(1)
+    pyautogui.press("down")
+    for _ in range(15):
+        pyautogui.press("up")
     for _ in range(file_type_index - 1):
         pyautogui.press("down")
-        time.sleep(0.1)
     pyautogui.press("enter")
-    time.sleep(0.5)
+    time.sleep(1)
 
 
 def _save_as_image_pdf(output_path: Path):
