@@ -131,7 +131,7 @@ def _apply_levels(black_point: int, white_point: int):
     time.sleep(1.5)
 
 
-def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 15):
+def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 45):
     """'이미지를 처리하는 중' 창이 나타났다가 사라질 때까지 대기
 
     Args:
