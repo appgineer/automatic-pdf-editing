@@ -18,6 +18,14 @@ class FolderSelector(tk.Frame):
         tk.Button(self, text="찾기", command=self._browse).pack(side=tk.LEFT, padx=2)
 
     def _browse(self):
+        folder = self._browse_powershell() or filedialog.askdirectory()
+        if folder:
+            self.path_var.set(folder)
+            if self.on_change:
+                self.on_change(folder)
+
+    @staticmethod
+    def _browse_powershell() -> str:
         import subprocess
         try:
             result = subprocess.run(
@@ -27,13 +35,9 @@ class FolderSelector(tk.Frame):
                  "$f.ShowDialog() | Out-Null; $f.SelectedPath"],
                 capture_output=True, text=True, timeout=120
             )
-            folder = result.stdout.strip()
+            return result.stdout.strip()
         except Exception:
-            folder = ""
-        if folder:
-            self.path_var.set(folder)
-            if self.on_change:
-                self.on_change(folder)
+            return ""
 
     def get_path(self) -> str:
         return self.path_var.get()
