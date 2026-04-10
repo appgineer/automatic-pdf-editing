@@ -18,7 +18,9 @@ class FolderSelector(tk.Frame):
         tk.Button(self, text="찾기", command=self._browse).pack(side=tk.LEFT, padx=2)
 
     def _browse(self):
+        print("[DEBUG] 찾기 버튼 클릭됨")
         folder = filedialog.askdirectory()
+        print(f"[DEBUG] 대화상자 결과: {folder}")
         if folder:
             self.path_var.set(folder)
             if self.on_change:
