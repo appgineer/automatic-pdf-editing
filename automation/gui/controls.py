@@ -29,10 +29,11 @@ class FolderSelector(tk.Frame):
         import subprocess
         try:
             result = subprocess.run(
-                ["powershell", "-Command",
+                ["powershell", "-ExecutionPolicy", "Bypass", "-NoProfile",
+                 "-Command",
                  "Add-Type -AssemblyName System.Windows.Forms; "
                  "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
-                 "$f.ShowDialog() | Out-Null; $f.SelectedPath"],
+                 "if ($f.ShowDialog() -eq 'OK') { $f.SelectedPath }"],
                 capture_output=True, text=True, timeout=120
             )
             return result.stdout.strip()
