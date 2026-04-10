@@ -41,10 +41,16 @@ class MainWindow:
         folder_frame = tk.Frame(self.root, padx=8, pady=8)
         folder_frame.pack(fill=tk.X)
 
-        self.input_selector = FolderSelector(folder_frame, "작업예정:", on_change=self._on_folder_change)
+        self.input_selector = FolderSelector(folder_frame, "작업예정:",
+            on_change=self._on_folder_change,
+            on_browse_start=self._stop_auto_scan,
+            on_browse_end=self._start_auto_scan)
         self.input_selector.pack(fill=tk.X, pady=2)
 
-        self.output_selector = FolderSelector(folder_frame, "완료파일:", on_change=self._on_folder_change)
+        self.output_selector = FolderSelector(folder_frame, "완료파일:",
+            on_change=self._on_folder_change,
+            on_browse_start=self._stop_auto_scan,
+            on_browse_end=self._start_auto_scan)
         self.output_selector.pack(fill=tk.X, pady=2)
 
         # 액션 버튼
@@ -117,8 +123,8 @@ class MainWindow:
         self._refresh_tree()
 
     def _start_auto_scan(self):
-        """시작 전 5초마다 자동 스캔"""
-        self._auto_scan_id = self.root.after(5000, self._auto_scan_tick)
+        """시작 전 1분마다 자동 스캔"""
+        self._auto_scan_id = self.root.after(60000, self._auto_scan_tick)
 
     def _stop_auto_scan(self):
         """자동 스캔 중지"""
@@ -129,7 +135,7 @@ class MainWindow:
     def _auto_scan_tick(self):
         """자동 스캔 1회 실행 후 다음 예약"""
         self._scan_input_folder()
-        self._auto_scan_id = self.root.after(5000, self._auto_scan_tick)
+        self._auto_scan_id = self.root.after(60000, self._auto_scan_tick)
 
     def _on_start(self):
         input_path = self.input_selector.get_path()
