@@ -5,12 +5,9 @@ from tkinter import filedialog
 
 
 class FolderSelector(tk.Frame):
-    def __init__(self, parent, label_text: str, on_change=None,
-                 on_browse_start=None, on_browse_end=None):
+    def __init__(self, parent, label_text: str, on_change=None):
         super().__init__(parent)
         self.on_change = on_change
-        self.on_browse_start = on_browse_start
-        self.on_browse_end = on_browse_end
 
         tk.Label(self, text=label_text, width=8, anchor=tk.W).pack(side=tk.LEFT)
 
@@ -21,11 +18,7 @@ class FolderSelector(tk.Frame):
         tk.Button(self, text="찾기", command=self._browse).pack(side=tk.LEFT, padx=2)
 
     def _browse(self):
-        if self.on_browse_start:
-            self.on_browse_start()
-        folder = filedialog.askdirectory(parent=self.winfo_toplevel())
-        if self.on_browse_end:
-            self.on_browse_end()
+        folder = filedialog.askdirectory()
         if folder:
             self.path_var.set(folder)
             if self.on_change:
