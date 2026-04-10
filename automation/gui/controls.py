@@ -23,7 +23,7 @@ class FolderSelector(tk.Frame):
     def _browse(self):
         if self.on_browse_start:
             self.on_browse_start()
-        folder = filedialog.askdirectory()
+        folder = filedialog.askdirectory(parent=self.winfo_toplevel())
         if self.on_browse_end:
             self.on_browse_end()
         if folder:
