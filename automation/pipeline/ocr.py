@@ -100,11 +100,11 @@ def _set_language(languages: list[str]):
     time.sleep(0.5)
 
 
-def _wait_for_file_complete(file_path: Path, timeout: int = 600):
+def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
     """파일이 생성되고 크기가 안정될 때까지 대기 (OCR 완료 감지)
 
     파일 크기가 3초간 변하지 않으면 완료로 판단.
-    최대 10분 대기.
+    최대 40분 대기.
     """
     start = time.time()
 

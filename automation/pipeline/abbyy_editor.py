@@ -37,7 +37,7 @@ pyautogui.PAUSE = 0.3
 ABBYY_OCR_EXE = r"C:\Program Files\ABBYY FineReader 16\FineReaderOCR.exe"
 
 LOADING_POLL_INTERVAL = 0.5
-LOADING_TIMEOUT = 600  # 10분
+LOADING_TIMEOUT = 2400  # 40분
 
 
 # ── ABBYY 편집기 실행 ──────────────────────────────────────────
@@ -131,50 +131,75 @@ def _apply_levels(black_point: int, white_point: int):
     time.sleep(1.5)
 
 
-def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 60):
-    """'이미지를 처리하는 중' 창이 나타났다가 사라질 때까지 대기
+def _check_loading_window(gw, loading_title: str) -> bool:
+    """로딩 창이 현재 떠있는지 확인"""
+    for win in gw.getAllWindows():
+        if loading_title in win.title:
+            return True
+    return False
 
-    Args:
-        timeout: 처리 완료 대기 최대 시간 (기본 10분)
-        detect_timeout: 로딩 창 감지 대기 시간 (기본 60초, 짧게 끝나면 로딩 창이 안 뜸)
+
+def _wait_for_loading_gone(gw, loading_title: str, timeout: int = LOADING_TIMEOUT):
+    """Phase 2: 로딩 창이 사라질 때까지 대기"""
+    start = time.time()
+    while time.time() - start < timeout:
+        if not _check_loading_window(gw, loading_title):
+            logger.info(f"레벨 처리 완료 ({time.time() - start:.0f}초)")
+            time.sleep(3)
+            _find_abbyy_window()
+            return False
+        time.sleep(LOADING_POLL_INTERVAL)
+    raise RuntimeError(f"레벨 처리 타임아웃 ({timeout}초)")
+
+
+def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 180) -> bool:
+    """레벨 처리 완료 대기
+
+    Returns:
+        True: Ctrl+S로 저장 대화상자가 이미 열림 (Phase 3)
+        False: 로딩 창 감지로 완료 확인 (Phase 1/2)
     """
     import pygetwindow as gw
 
     LOADING_TITLE = "이미지를 처리하는 중"
+    CTRL_S_INTERVAL = 180  # 3분
 
     logger.info("레벨 처리 완료 대기중...")
     start = time.time()
 
-    # Phase 1: '이미지를 처리하는 중' 창이 나타날 때까지 대기 (짧은 타임아웃)
+    # Phase 1: 로딩 창 감지 대기 (최초 3분)
     loading_appeared = False
     while time.time() - start < detect_timeout:
-        for win in gw.getAllWindows():
-            if LOADING_TITLE in win.title:
-                loading_appeared = True
-                logger.info(f"로딩 창 감지: '{win.title}'")
-                break
-        if loading_appeared:
+        if _check_loading_window(gw, LOADING_TITLE):
+            loading_appeared = True
+            logger.info("로딩 창 감지")
             break
         time.sleep(LOADING_POLL_INTERVAL)
 
-    if not loading_appeared:
-        logger.info("로딩 창 미감지 - 이미 완료된 것으로 판단")
-        _find_abbyy_window()
-        return
+    # Phase 2: 로딩 창이 떴으면 사라질 때까지 대기
+    if loading_appeared:
+        return _wait_for_loading_gone(gw, LOADING_TITLE, timeout)
 
-    # Phase 2: '이미지를 처리하는 중' 창이 사라질 때까지 대기
+    # Phase 3: 로딩 창 미감지 → 3분마다 Ctrl+S 시도 + 로딩 창 감지 병행
+    logger.info("로딩 창 미감지 - Ctrl+S로 완료 확인 시작")
     while time.time() - start < timeout:
-        found = False
-        for win in gw.getAllWindows():
-            if LOADING_TITLE in win.title:
-                found = True
-                break
-        if not found:
-            logger.info(f"레벨 처리 완료 ({time.time() - start:.0f}초)")
-            time.sleep(3)
-            _find_abbyy_window()
-            return
-        time.sleep(LOADING_POLL_INTERVAL)
+        # Ctrl+S 시도
+        _find_abbyy_window()
+        time.sleep(1)
+        pyautogui.hotkey("ctrl", "s")
+        time.sleep(2)
+
+        if _detect_save_dialog():
+            logger.info(f"Ctrl+S로 저장 대화상자 감지 ({time.time() - start:.0f}초)")
+            return True
+
+        # 3분 대기하면서 로딩 창 감지 병행
+        wait_start = time.time()
+        while time.time() - wait_start < CTRL_S_INTERVAL:
+            if _check_loading_window(gw, LOADING_TITLE):
+                logger.info("대기 중 로딩 창 감지 → Phase 2로 전환")
+                return _wait_for_loading_gone(gw, LOADING_TITLE, timeout)
+            time.sleep(LOADING_POLL_INTERVAL)
 
     raise RuntimeError(f"레벨 처리 타임아웃 ({timeout}초)")
 
@@ -193,7 +218,8 @@ def _detect_save_dialog(timeout: int = 3) -> bool:
     return False
 
 
-def _open_save_dialog(output_path: Path, file_type_index: int):
+def _open_save_dialog(output_path: Path, file_type_index: int,
+                      skip_open: bool = False):
     """Ctrl+S로 저장 대화상자를 열고 경로 입력 + 파일 형식 선택
 
     Args:
@@ -201,16 +227,18 @@ def _open_save_dialog(output_path: Path, file_type_index: int):
         file_type_index: 파일 형식 드롭다운 인덱스 (1-based, 위에서부터)
             5 = 검색 가능한 PDF 문서
             6 = 이미지 전용 PDF 문서
+        skip_open: True면 저장 대화상자가 이미 열려있으므로 Esc+Ctrl+S 스킵
     """
-    _find_abbyy_window()
-    time.sleep(1)
-    pyautogui.press("escape")  # 이미지 편집기 모드 해제
-    time.sleep(1)
-    pyautogui.hotkey("ctrl", "s")
-    time.sleep(2)
+    if not skip_open:
+        _find_abbyy_window()
+        time.sleep(1)
+        pyautogui.press("escape")  # 이미지 편집기 모드 해제
+        time.sleep(1)
+        pyautogui.hotkey("ctrl", "s")
+        time.sleep(2)
 
-    if not _detect_save_dialog():
-        raise RuntimeError("저장 대화상자 열기 실패")
+        if not _detect_save_dialog():
+            raise RuntimeError("저장 대화상자 열기 실패")
     logger.info("저장 대화상자 감지")
 
     # 경로 입력 (파일 이름이 전체 선택 상태)
@@ -230,24 +258,26 @@ def _open_save_dialog(output_path: Path, file_type_index: int):
     time.sleep(1)
 
 
-def _save_as_image_pdf(output_path: Path):
+def _save_as_image_pdf(output_path: Path, dialog_already_open: bool = False):
     """Ctrl+S → 경로 입력 → 이미지 전용 PDF 선택 → 저장"""
     logger.info(f"이미지 PDF로 저장: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    _open_save_dialog(output_path, file_type_index=6)  # 이미지 전용 PDF 문서
+    _open_save_dialog(output_path, file_type_index=6,
+                      skip_open=dialog_already_open)
     pyautogui.press("enter")
 
     _wait_for_file_complete(output_path)
     logger.info(f"저장 완료: {output_path}")
 
 
-def _save_as_searchable_pdf(output_path: Path):
+def _save_as_searchable_pdf(output_path: Path, dialog_already_open: bool = False):
     """Ctrl+S → 경로 입력 → 검색 가능한 PDF 선택 → 저장"""
     logger.info(f"검색 가능 PDF로 저장: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    _open_save_dialog(output_path, file_type_index=5)  # 검색 가능한 PDF 문서
+    _open_save_dialog(output_path, file_type_index=5,
+                      skip_open=dialog_already_open)
     pyautogui.press("enter")
     time.sleep(2)
     pyautogui.press("enter")  # OCR 안내창 닫기
@@ -267,8 +297,8 @@ def run_levels_only(input_path: Path, output_path: Path,
         _open_in_ocr_editor(input_path)
         _enter_image_editor()
         _apply_levels(black_point, white_point)
-        _wait_for_processing()
-        _save_as_image_pdf(output_path)
+        dialog_open = _wait_for_processing()
+        _save_as_image_pdf(output_path, dialog_already_open=dialog_open)
     finally:
         _close_abbyy()
 
@@ -290,8 +320,8 @@ def run_levels_with_ocr(input_path: Path, output_path: Path,
         _set_language(languages)
         _enter_image_editor()
         _apply_levels(black_point, white_point)
-        _wait_for_processing()
-        _save_as_searchable_pdf(output_path)
+        dialog_open = _wait_for_processing()
+        _save_as_searchable_pdf(output_path, dialog_already_open=dialog_open)
     finally:
         _close_abbyy()
 
