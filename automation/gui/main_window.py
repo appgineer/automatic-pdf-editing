@@ -34,7 +34,6 @@ class MainWindow:
         self._build_ui()
         self._load_settings()
         self._scan_input_folder()
-        self._start_auto_scan()
 
     def _build_ui(self):
         # 폴더 선택
@@ -42,15 +41,11 @@ class MainWindow:
         folder_frame.pack(fill=tk.X)
 
         self.input_selector = FolderSelector(folder_frame, "작업예정:",
-            on_change=self._on_folder_change,
-            on_browse_start=self._stop_auto_scan,
-            on_browse_end=self._start_auto_scan)
+            on_change=self._on_folder_change)
         self.input_selector.pack(fill=tk.X, pady=2)
 
         self.output_selector = FolderSelector(folder_frame, "완료파일:",
-            on_change=self._on_folder_change,
-            on_browse_start=self._stop_auto_scan,
-            on_browse_end=self._start_auto_scan)
+            on_change=self._on_folder_change)
         self.output_selector.pack(fill=tk.X, pady=2)
 
         # 액션 버튼
