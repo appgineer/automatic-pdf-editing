@@ -34,6 +34,7 @@ class MainWindow:
         self._build_ui()
         self._load_settings()
         self._scan_input_folder()
+        self._start_auto_scan()
 
     def _build_ui(self):
         # 폴더 선택
@@ -119,7 +120,7 @@ class MainWindow:
 
     def _start_auto_scan(self):
         """시작 전 1분마다 자동 스캔"""
-        self._auto_scan_id = self.root.after(60000, self._auto_scan_tick)
+        self._auto_scan_id = self.root.after(5000, self._auto_scan_tick)
 
     def _stop_auto_scan(self):
         """자동 스캔 중지"""
@@ -130,7 +131,7 @@ class MainWindow:
     def _auto_scan_tick(self):
         """자동 스캔 1회 실행 후 다음 예약"""
         self._scan_input_folder()
-        self._auto_scan_id = self.root.after(60000, self._auto_scan_tick)
+        self._auto_scan_id = self.root.after(5000, self._auto_scan_tick)
 
     def _on_start(self):
         input_path = self.input_selector.get_path()
