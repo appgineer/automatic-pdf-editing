@@ -127,7 +127,7 @@ class PipelineRunner:
                 split_pdf_by_size(named_pdf, config.split_size_mb, output_dir)
         else:
             final_path = output_dir / f"{final_stem}.pdf"
-            shutil.copy2(current_pdf, final_path)
+            self._copy_with_retry(current_pdf, final_path)
 
     # ── Flow 1: 일반+OCR ─────────────────────────────────────
 
@@ -228,6 +228,20 @@ class PipelineRunner:
         merged = tmp / f"{job.book_name}.pdf"
         merge_pdfs(result_files, merged)
         return merged
+
+    def _copy_with_retry(self, src: Path, dst: Path, max_retries: int = 3, delay: int = 5):
+        """파일 복사 (실패 시 재시도)"""
+        import time
+        for attempt in range(1, max_retries + 1):
+            try:
+                shutil.copy2(src, dst)
+                return
+            except OSError as e:
+                if attempt < max_retries:
+                    logger.warning(f"파일 복사 실패 (시도 {attempt}/{max_retries}): {e} - {delay}초 후 재시도")
+                    time.sleep(delay)
+                else:
+                    raise
 
     def _create_zip(self, customer_name: str):
         """고객의 모든 완료된 책을 ZIP으로 압축 후 폴더 삭제"""
