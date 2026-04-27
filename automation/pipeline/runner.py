@@ -65,8 +65,8 @@ class PipelineRunner:
             job.current_step = "완료"
             logger.info(f"작업 완료: {job.display_name}")
 
-            # 고객의 모든 책 완료 시 ZIP 생성
-            if self.queue.all_customer_done(job.customer_name):
+            # 고객 폴더 안에 N권 다 모이면 ZIP 생성
+            if self._should_zip_customer(job.customer_name, job.expected_count):
                 self._create_zip(job.customer_name)
 
         except Exception as e:
@@ -108,8 +108,8 @@ class PipelineRunner:
             suffix += "_OCR"
         final_stem = f"{job.book_name}{suffix}"
 
-        # --- 최종 출력 ---
-        output_dir = self.output_folder / job.customer_name
+        # --- 최종 출력 (출력폴더/고객명/책명/) ---
+        output_dir = self.output_folder / job.customer_name / job.book_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
         if config.is_split and (config.split_method == "page" or config.split_method == "size"):
@@ -243,17 +243,26 @@ class PipelineRunner:
                 else:
                     raise
 
+    def _should_zip_customer(self, customer_name: str, expected_count: int | None) -> bool:
+        """출력폴더/고객명/ 안의 책 서브폴더 수가 expected_count 이상이면 True"""
+        if not expected_count or expected_count <= 0:
+            return False
+        customer_dir = self.output_folder / customer_name
+        if not customer_dir.exists():
+            return False
+        book_count = sum(1 for d in customer_dir.iterdir() if d.is_dir())
+        return book_count >= expected_count
+
     def _create_zip(self, customer_name: str):
         """고객의 모든 완료된 책을 ZIP으로 압축 후 폴더 삭제"""
         customer_dir = self.output_folder / customer_name
         if not customer_dir.exists():
             return
 
-        all_files = list(customer_dir.rglob("*.pdf"))
-        if all_files:
-            zip_paths = create_customer_zip(customer_name, all_files, self.output_folder)
-            for zp in zip_paths:
-                logger.info(f"ZIP 생성: {zp.name}")
+        zip_paths = create_customer_zip(customer_name, customer_dir, self.output_folder)
+        for zp in zip_paths:
+            logger.info(f"ZIP 생성: {zp.name}")
 
+        if zip_paths:
             # ZIP 생성 후 고객 폴더 삭제 (ZIP만 남김)
             shutil.rmtree(customer_dir, ignore_errors=True)

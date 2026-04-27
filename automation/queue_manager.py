@@ -115,7 +115,3 @@ class QueueManager:
             for i, j in enumerate(next_jobs):
                 self._jobs.insert(insert_idx + i, j)
 
-    def all_customer_done(self, customer_name: str) -> bool:
-        """고객의 모든 작업이 완료되었는지 확인"""
-        jobs = self.get_customer_jobs(customer_name)
-        return len(jobs) > 0 and all(j.status == JobStatus.DONE for j in jobs)

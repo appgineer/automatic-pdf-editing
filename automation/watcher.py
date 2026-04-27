@@ -4,7 +4,7 @@ import time
 import threading
 import logging
 from pathlib import Path
-from automation.models import Job, BookConfig
+from automation.models import Job, BookConfig, parse_customer_folder
 from automation.queue_manager import QueueManager
 
 logger = logging.getLogger(__name__)
@@ -51,15 +51,18 @@ class FolderWatcher:
         if not self.input_folder or not self.input_folder.exists():
             return
 
-        # 입력폴더/고객이름/책이름/ 구조 탐색
+        # 입력폴더/고객이름[-N]/책이름/ 구조 탐색
         for customer_dir in self.input_folder.iterdir():
             if not customer_dir.is_dir() or customer_dir.name.startswith("."):
                 continue
 
-            for book_dir in customer_dir.iterdir():
-                if not book_dir.is_dir() or book_dir.name.startswith("."):
-                    continue
+            customer_name, expected_count = parse_customer_folder(customer_dir.name)
+            book_dirs = [d for d in customer_dir.iterdir()
+                         if d.is_dir() and not d.name.startswith(".")]
+            if expected_count is None:
+                expected_count = len(book_dirs)
 
+            for book_dir in book_dirs:
                 config_path = book_dir / "config.json"
                 pdf_files = sorted(book_dir.glob("*.pdf"))
 
@@ -77,10 +80,12 @@ class FolderWatcher:
                     continue
 
                 job = Job(
-                    customer_name=customer_dir.name,
+                    customer_name=customer_name,
                     book_name=book_dir.name,
                     book_dir=book_dir,
                     config=config,
+                    customer_folder_name=customer_dir.name,
+                    expected_count=expected_count,
                     pdf_files=pdf_files,
                 )
 

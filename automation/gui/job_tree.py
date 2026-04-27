@@ -54,13 +54,14 @@ class JobTree(ttk.Frame):
         self._customer_nodes.clear()
         self._job_nodes.clear()
 
-        # 고객별 그룹
+        # 고객별 그룹 (key: customer_name, label: customer_folder_name)
         customers: dict[str, list[Job]] = {}
         for job in jobs:
             customers.setdefault(job.customer_name, []).append(job)
 
         for customer_name, customer_jobs in customers.items():
-            cid = self.tree.insert("", tk.END, text=customer_name, open=True)
+            label = customer_jobs[0].customer_folder_name or customer_name
+            cid = self.tree.insert("", tk.END, text=label, open=True)
             self._customer_nodes[customer_name] = cid
 
             for job in customer_jobs:

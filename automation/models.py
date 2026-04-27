@@ -1,10 +1,30 @@
 """작업 모델 정의"""
 
 import json
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional
+
+
+_CUSTOMER_SUFFIX_RE = re.compile(r"^(?P<name>.+)-(?P<count>\d+)$")
+
+
+def parse_customer_folder(folder_name: str) -> tuple[str, int | None]:
+    """입력 폴더명에서 고객 이름과 권수를 추출.
+
+    "박명수-3" → ("박명수", 3)
+    "박명수"   → ("박명수", None)
+    "a-b-2"   → ("a-b", 2)
+    """
+    m = _CUSTOMER_SUFFIX_RE.match(folder_name)
+    if not m:
+        return folder_name, None
+    count = int(m.group("count"))
+    if count <= 0:
+        return folder_name, None
+    return m.group("name"), count
 
 
 class JobStatus(Enum):
@@ -55,18 +75,24 @@ class BookConfig:
 
 @dataclass
 class Job:
-    customer_name: str
+    customer_name: str  # 접미사 제거된 이름 ("박명수")
     book_name: str
     book_dir: Path
     config: BookConfig
+    customer_folder_name: str = ""  # 입력 폴더명 그대로 ("박명수-3")
+    expected_count: int | None = None  # 총 권수 N
     status: JobStatus = JobStatus.WAITING
     current_step: str = ""
     error_message: str = ""
     pdf_files: list = field(default_factory=list)
 
+    def __post_init__(self):
+        if not self.customer_folder_name:
+            self.customer_folder_name = self.customer_name
+
     @property
     def display_name(self) -> str:
-        return f"{self.customer_name} / {self.book_name}"
+        return f"{self.customer_folder_name} / {self.book_name}"
 
     def get_pdf_files(self) -> list:
         if not self.pdf_files:
