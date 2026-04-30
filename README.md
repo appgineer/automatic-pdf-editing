@@ -53,9 +53,10 @@ automatic-pdf-editing/
 │   ├── pipeline/
 │   │   ├── runner.py           # 파이프라인 실행
 │   │   ├── merge.py            # PDF 합치기
-│   │   ├── levels.py           # 레벨 조정
 │   │   ├── split.py            # PDF 분할
-│   │   ├── ocr.py              # ABBYY 자동화 (Phase 4)
+│   │   ├── page_utils.py       # 첫 페이지 복사/삭제
+│   │   ├── ocr.py              # ABBYY OCR 자동화
+│   │   ├── abbyy_editor.py     # ABBYY 레벨 조정 자동화
 │   │   └── compress.py         # ZIP 압축
 │   └── gui/
 │       ├── main_window.py      # 메인 윈도우
@@ -104,7 +105,6 @@ automatic-pdf-editing/
 
 ```
 pymupdf>=1.23.0
-Pillow>=10.0.0
 pyautogui>=0.9.54
 ```
 
@@ -116,7 +116,7 @@ python run_automation.py
 
 ## 구현 상태
 
-- [x] Phase 1: PDF 처리 기반 (merge, levels, split, compress)
+- [x] Phase 1: PDF 처리 기반 (merge, split, compress)
 - [x] Phase 2: 큐 & 감시 & 파이프라인
 - [x] Phase 3: GUI + 통합
 - [ ] Phase 4: ABBYY OCR 자동화 (B컴퓨터에서 개발)

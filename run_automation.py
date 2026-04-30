@@ -10,7 +10,6 @@ REQUIREMENTS = PROJECT_DIR / "requirements.txt"
 
 IMPORT_NAME_MAP = {
     "PyMuPDF": "fitz",
-    "Pillow": "PIL",
     "PyGetWindow": "pygetwindow",
 }
 
