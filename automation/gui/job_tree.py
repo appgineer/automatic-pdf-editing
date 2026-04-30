@@ -24,7 +24,6 @@ class JobTree(ttk.Frame):
     def __init__(self, parent, on_select=None):
         super().__init__(parent)
         self.on_select = on_select
-        self._selected_job: Job | None = None
         self._selected_customer: str | None = None
 
         style = ttk.Style()
@@ -105,9 +104,6 @@ class JobTree(ttk.Frame):
             if cid == node_id:
                 self._selected_customer = name
                 break
-
-    def get_selected_job(self) -> Job | None:
-        return self._selected_job
 
     def get_selected_customer(self) -> str | None:
         return self._selected_customer
