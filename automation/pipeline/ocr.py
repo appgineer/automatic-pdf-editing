@@ -167,6 +167,8 @@ def _save_as_searchable_pdf(output_path: Path):
 
     # 저장 (OCR 처리 + 저장이 동시에 진행됨)
     pyautogui.press("enter")
+    time.sleep(2)
+    pyautogui.press("enter")  # OCR 안내창 닫기
 
     # OCR + 저장 완료 대기: 파일이 생성되고 크기가 안정될 때까지
     logger.info("OCR 처리 + 저장 대기중...")
