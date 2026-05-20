@@ -18,7 +18,7 @@ from automation.pipeline.compress import create_customer_zip
 
 logger = logging.getLogger(__name__)
 
-SPLIT_PAGES = 150  # 분할 단위 (OCR, 고급 공통)
+SPLIT_PAGES = 300  # 분할 단위 (OCR, 고급 공통)
 
 
 class PipelineRunner:
