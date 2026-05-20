@@ -12,6 +12,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from automation.config import load_settings, save_settings
+from automation.error_log import setup_error_log
 from automation.queue_manager import QueueManager
 from automation.watcher import FolderWatcher
 from automation.pipeline.runner import PipelineRunner
@@ -133,6 +134,7 @@ class MainWindow:
             return
 
         output_dir.mkdir(parents=True, exist_ok=True)
+        setup_error_log(output_dir)
 
         # 감시 시작 (새 폴더 추가 감지용)
         self.watcher.start(input_dir)

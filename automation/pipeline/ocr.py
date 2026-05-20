@@ -100,6 +100,44 @@ def _set_language(languages: list[str]):
     time.sleep(0.5)
 
 
+def _log_timeout_diagnostic(context: str, file_path: Path | None = None):
+    """타임아웃 raise 직전 진단 정보 (창/파일/프로세스) 로깅"""
+    import subprocess
+
+    try:
+        import pygetwindow as gw
+        relevant = []
+        for w in gw.getAllWindows():
+            t = w.title
+            if t and any(k in t for k in ("FineReader", "ABBYY", "저장", "OCR")):
+                relevant.append(t)
+        logger.warning(f"타임아웃 진단 [{context}] - 열린 ABBYY 관련 창: {relevant}")
+    except Exception as e:
+        logger.warning(f"타임아웃 진단 [{context}] - 창 목록 실패: {e}")
+
+    if file_path is not None:
+        try:
+            parent = file_path.parent
+            if parent.exists():
+                files = [f.name for f in parent.iterdir()]
+                logger.warning(f"타임아웃 진단 [{context}] - 출력폴더({parent}): {files}")
+            else:
+                logger.warning(f"타임아웃 진단 [{context}] - 출력폴더 없음: {parent}")
+        except Exception as e:
+            logger.warning(f"타임아웃 진단 [{context}] - 폴더 확인 실패: {e}")
+
+    for exe in ("FineReaderOCR.exe", "FineReader.exe"):
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"IMAGENAME eq {exe}"],
+                capture_output=True, text=True, timeout=5,
+            )
+            running = exe in result.stdout
+            logger.warning(f"타임아웃 진단 [{context}] - {exe} 실행 중: {running}")
+        except Exception as e:
+            logger.warning(f"타임아웃 진단 [{context}] - {exe} 확인 실패: {e}")
+
+
 def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
     """파일이 생성되고 크기가 안정될 때까지 대기 (OCR 완료 감지)
 
@@ -114,6 +152,7 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
             break
         time.sleep(1)
     else:
+        _log_timeout_diagnostic("OCR 파일 생성", file_path)
         raise RuntimeError(f"OCR 파일 생성 타임아웃 ({timeout}초): {file_path}")
 
     # 2. 파일 크기가 안정될 때까지 대기 (3초간 변화 없으면 완료)
@@ -131,6 +170,7 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
         prev_size = current_size
         time.sleep(1)
 
+    _log_timeout_diagnostic("OCR 파일 안정화", file_path)
     raise RuntimeError(f"OCR 파일 안정화 타임아웃 ({timeout}초): {file_path}")
 
 

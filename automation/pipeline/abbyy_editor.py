@@ -26,6 +26,7 @@ from automation.pipeline.ocr import (
     _wait_for_file_complete,
     _close_abbyy,
     _set_language,
+    _log_timeout_diagnostic,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,6 +150,7 @@ def _wait_for_loading_gone(gw, loading_title: str, timeout: int = LOADING_TIMEOU
             _find_abbyy_window()
             return False
         time.sleep(LOADING_POLL_INTERVAL)
+    _log_timeout_diagnostic("레벨 처리 (로딩 창 사라짐 대기)")
     raise RuntimeError(f"레벨 처리 타임아웃 ({timeout}초)")
 
 
@@ -201,6 +203,7 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 1
                 return _wait_for_loading_gone(gw, LOADING_TITLE, timeout)
             time.sleep(LOADING_POLL_INTERVAL)
 
+    _log_timeout_diagnostic("레벨 처리 (Ctrl+S 폴백)")
     raise RuntimeError(f"레벨 처리 타임아웃 ({timeout}초)")
 
 
