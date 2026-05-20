@@ -52,7 +52,41 @@ class PipelineRunner:
             else:
                 time.sleep(1)
 
+    def _compute_final_stem(self, job: Job) -> str:
+        suffix = ""
+        if job.config.scan_type == "고급":
+            suffix += "_고급"
+        if job.config.ocr:
+            suffix += "_OCR"
+        return f"{job.book_name}{suffix}"
+
+    def _is_job_done(self, job: Job) -> bool:
+        """출력물이 이미 존재하면 True (재개용)"""
+        for zp in self.output_folder.glob(f"{job.customer_name}님*.zip"):
+            if zp.is_file():
+                return True
+
+        output_dir = self.output_folder / job.customer_name / job.book_name
+        config = job.config
+
+        if config.is_split and config.split_method in ("page", "size"):
+            if not output_dir.exists():
+                return False
+            return any(p.stat().st_size > 0 for p in output_dir.glob("*.pdf"))
+
+        final_path = output_dir / f"{self._compute_final_stem(job)}.pdf"
+        return final_path.exists() and final_path.stat().st_size > 0
+
     def _process_job(self, job: Job):
+        if self._is_job_done(job):
+            job.status = JobStatus.DONE
+            job.current_step = "이미 완료됨 (건너뜀)"
+            logger.info(f"이미 완료된 작업 건너뜀: {job.display_name}")
+            self._notify()
+            if self._should_zip_customer(job.customer_name, job.expected_count):
+                self._create_zip(job.customer_name)
+            return
+
         job.status = JobStatus.RUNNING
         self._notify()
 
@@ -101,12 +135,7 @@ class PipelineRunner:
             current_pdf = self._flow_standard_ocr(job, tmp, current_pdf)
 
         # --- 파일명 접미사 조합 ---
-        suffix = ""
-        if config.scan_type == "고급":
-            suffix += "_고급"
-        if config.ocr:
-            suffix += "_OCR"
-        final_stem = f"{job.book_name}{suffix}"
+        final_stem = self._compute_final_stem(job)
 
         # --- 최종 출력 (출력폴더/고객명/책명/) ---
         output_dir = self.output_folder / job.customer_name / job.book_name
