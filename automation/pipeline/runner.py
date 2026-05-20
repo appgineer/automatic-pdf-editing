@@ -11,8 +11,7 @@ from automation.models import Job, JobStatus
 from automation.queue_manager import QueueManager
 from automation.pipeline.merge import merge_pdfs
 from automation.pipeline.split import split_pdf_by_count, split_pdf_by_page_ranges, split_pdf_by_size
-from automation.pipeline.ocr import run_ocr
-from automation.pipeline.abbyy_editor import run_levels_only, run_levels_with_ocr
+from automation.pipeline.abbyy_editor import run_levels_only, run_levels_with_ocr, run_ocr_only
 from automation.pipeline.page_utils import prepend_first_page, delete_first_page
 from automation.pipeline.compress import create_customer_zip
 
@@ -180,7 +179,7 @@ class PipelineRunner:
             job.current_step = f"OCR 처리중 ({i}/{len(split_files)})"
             self._notify()
             ocr_out = ocr_dir / f"{split_file.stem}_OCR.pdf"
-            run_ocr(split_file, ocr_out, config.ocr_language)
+            run_ocr_only(split_file, ocr_out, config.ocr_language)
             ocr_files.append(ocr_out)
 
         job.current_step = "OCR 결과 합치기"

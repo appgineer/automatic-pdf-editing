@@ -288,6 +288,25 @@ def _save_as_searchable_pdf(output_path: Path, dialog_already_open: bool = False
 
 # ── 공개 API ──────────────────────────────────────────────────
 
+def run_ocr_only(input_path: Path, output_path: Path,
+                 languages: list[str] | str = "Korean") -> Path:
+    """일반+OCR: 색상 보정 없이 ABBYY OCR 편집기에서 검색 가능 PDF로 저장"""
+    if isinstance(languages, str):
+        languages = [languages]
+
+    logger.info(f"OCR 시작 (일반): {input_path.name}")
+
+    try:
+        _open_in_ocr_editor(input_path)
+        _set_language(languages)
+        _save_as_searchable_pdf(output_path)
+    finally:
+        _close_abbyy()
+
+    logger.info(f"OCR 완료: {output_path.name}")
+    return output_path
+
+
 def run_levels_only(input_path: Path, output_path: Path,
                     black_point: int, white_point: int) -> Path:
     """고급만: ABBYY 편집기에서 레벨 조정 후 이미지 PDF로 저장"""
