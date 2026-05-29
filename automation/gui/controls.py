@@ -48,7 +48,9 @@ class FolderSelector(tk.Frame):
 
 
 class ActionButtons(tk.Frame):
-    def __init__(self, parent, on_start=None, on_stop=None, on_up=None, on_down=None):
+    def __init__(self, parent, on_start=None, on_stop=None,
+                 on_update=None, on_cache_delete=None,
+                 on_up=None, on_down=None):
         super().__init__(parent)
 
         btn_frame = tk.Frame(self)
@@ -61,6 +63,15 @@ class ActionButtons(tk.Frame):
 
         self.stop_btn = tk.Button(btn_frame, text="중지", command=on_stop, width=8, font=btn_font, height=1, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=4)
+
+        # 업데이트 / 캐시 삭제 — 시작·중지 옆에 같이 왼쪽 정렬
+        self.update_btn = tk.Button(btn_frame, text="업데이트", command=on_update,
+                                    width=8, font=btn_font, height=1)
+        self.update_btn.pack(side=tk.LEFT, padx=4)
+
+        self.cache_btn = tk.Button(btn_frame, text="캐시 삭제", command=on_cache_delete,
+                                   width=8, font=btn_font, height=1)
+        self.cache_btn.pack(side=tk.LEFT, padx=4)
 
         tk.Frame(btn_frame, width=20).pack(side=tk.LEFT)
 

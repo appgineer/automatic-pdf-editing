@@ -54,6 +54,8 @@ class MainWindow:
             folder_frame,
             on_start=self._on_start,
             on_stop=self._on_stop,
+            on_update=self._on_update,
+            on_cache_delete=self._on_cache_delete,
             on_up=self._on_move_up,
             on_down=self._on_move_down,
         )
@@ -276,3 +278,54 @@ class MainWindow:
         if customer:
             self.queue.move_customer_down(customer)
             self._refresh_tree()
+
+    def _on_update(self):
+        """업데이트 버튼 (기능 미구현 — 추후 정의)"""
+        self.status_var.set("업데이트 기능은 준비 중입니다")
+        logger.info("업데이트 버튼 클릭 (미구현)")
+
+    def _on_cache_delete(self):
+        """ABBYY FineReaderShell 캐시 폴더 내용물 삭제"""
+        from tkinter import messagebox
+
+        cache_dir = Path(tempfile.gettempdir()) / "ABBYY" / "FineReader" / "16" / "FineReaderShell"
+
+        if not cache_dir.exists():
+            messagebox.showinfo("캐시 삭제", "삭제할 캐시 폴더가 없습니다.")
+            self.status_var.set("캐시 폴더 없음")
+            return
+
+        # 확인 — 작업 중 클릭 시 ABBYY 강제 종료로 진행 중 책이 깨질 수 있음을 경고
+        if not messagebox.askyesno(
+            "캐시 삭제",
+            f"ABBYY 캐시를 모두 삭제할까요?\n\n"
+            f"경로: {cache_dir}\n\n"
+            f"⚠ 진행 중인 ABBYY 작업이 있다면 강제 종료되어 결과가 손상될 수 있습니다.",
+        ):
+            return
+
+        # 1. ABBYY 프로세스 종료 (파일 잠금 해제) — _on_close와 동일 패턴
+        for exe in ("FineReaderOCR.exe", "FineReader.exe"):
+            try:
+                subprocess.run(["taskkill", "/F", "/T", "/IM", exe],
+                               capture_output=True, timeout=5)
+            except Exception as e:
+                logger.warning(f"{exe} 종료 실패: {e}")
+
+        # 2. 폴더 내용물만 삭제 (폴더 자체는 보존)
+        deleted, failed = 0, 0
+        for item in cache_dir.iterdir():
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+                deleted += 1
+            except Exception as e:
+                failed += 1
+                logger.warning(f"캐시 삭제 실패: {item} - {e}")
+
+        msg = f"캐시 삭제 완료 ({deleted}개 삭제, {failed}개 실패)"
+        logger.info(msg)
+        self.status_var.set(msg)
+        messagebox.showinfo("캐시 삭제", msg)
