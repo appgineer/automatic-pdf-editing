@@ -29,6 +29,23 @@ POLL_INTERVAL = 0.5
 DEFAULT_TIMEOUT = 60
 
 
+# ── 진단 헬퍼 ─────────────────────────────────────────────────
+
+def _list_abbyy_windows() -> list[str]:
+    """현재 떠있는 ABBYY 관련 창 제목 목록 (진단용)"""
+    try:
+        import pygetwindow as gw
+        titles = []
+        for w in gw.getAllWindows():
+            t = w.title
+            if t and any(k in t for k in ("FineReader", "ABBYY", "저장", "OCR")):
+                titles.append(t)
+        return titles
+    except Exception as e:
+        logger.warning(f"창 목록 조회 실패: {e}")
+        return []
+
+
 # ── 창 감지 ──────────────────────────────────────────────────
 
 def _find_abbyy_window():
@@ -80,24 +97,30 @@ def _open_file(pdf_path: Path):
 
 def _set_language(languages: list[str]):
     """Ctrl+. → OCR 언어 설정"""
-    logger.info(f"언어 설정: {languages}")
+    logger.info(f"[언어] 시작: {languages}")
 
+    logger.info("[언어 1/4] Ctrl+. (언어 설정 창 열기)")
     pyautogui.hotkey("ctrl", ".")
     time.sleep(1)
 
-    for _ in range(3):
+    logger.info("[언어 2/4] Tab×3 (언어 입력칸 이동)")
+    for i in range(3):
         pyautogui.press("tab")
+        logger.info(f"[언어 2/4]  - Tab {i+1}/3")
         time.sleep(0.1)
 
-    for lang in languages:
+    for li, lang in enumerate(languages, 1):
+        logger.info(f"[언어 3/4]  - 언어 입력 {li}/{len(languages)}: '{lang}'")
         pyperclip.copy(lang)
         pyautogui.hotkey("ctrl", "v")
         time.sleep(0.3)
         pyautogui.press("enter")
         time.sleep(0.3)
 
+    logger.info("[언어 4/4] Enter (확인)")
     pyautogui.press("enter")
     time.sleep(0.5)
+    logger.info("[언어] 완료")
 
 
 def _log_timeout_diagnostic(context: str, file_path: Path | None = None):
@@ -143,19 +166,53 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
 
     파일 크기가 3초간 변하지 않으면 완료로 판단.
     최대 40분 대기.
+
+    Phase 1: 파일 생성 대기 (60초마다 폴더 상태 + 잘못된 확장자 감지 진행 로그)
+    Phase 2: 크기 안정화 대기
     """
     start = time.time()
+    stem = file_path.stem  # 예: "image_s2_OCR"
+    parent = file_path.parent
 
-    # 1. 파일이 생성될 때까지 대기
+    logger.info(f"[저장대기 1/2] 파일 생성 대기 시작: {file_path.name} (timeout={timeout}초)")
+
+    # Phase 1: 파일 생성 대기 + 주기적 진행 로그 + 잘못된 확장자 감지
+    last_progress = 0.0
+    wrong_ext_warned: set[str] = set()
     while time.time() - start < timeout:
         if file_path.exists() and file_path.stat().st_size > 0:
+            logger.info(f"[저장대기 1/2] 파일 생성 감지 ({time.time() - start:.0f}초): {file_path.name}")
             break
+
+        # 60초마다 진행 로그
+        elapsed = time.time() - start
+        if elapsed - last_progress >= 60:
+            last_progress = elapsed
+            try:
+                files_in_dir = [f.name for f in parent.iterdir()] if parent.exists() else []
+                logger.info(f"[저장대기 1/2] {elapsed:.0f}초 경과 - 폴더 내용: {files_in_dir}")
+
+                # 같은 stem인데 .pdf가 아닌 형제 파일이 있으면 → 잘못된 형식으로 저장됨
+                # 예: 기대=image_s2_OCR.pdf, 실제=image_s2_OCR.odt
+                wrong = [f for f in files_in_dir
+                         if f.startswith(stem + ".") and not f.endswith(".pdf")]
+                for w in wrong:
+                    if w not in wrong_ext_warned:
+                        wrong_ext_warned.add(w)
+                        logger.warning(
+                            f"[저장대기 1/2] ⚠ 잘못된 확장자 감지: '{w}' "
+                            f"— 메뉴/형식 드롭다운 네비 실패로 .pdf가 아닌 형식으로 저장된 것으로 추정"
+                        )
+            except Exception as e:
+                logger.warning(f"[저장대기 1/2] 폴더 확인 실패: {e}")
+
         time.sleep(1)
     else:
         _log_timeout_diagnostic("OCR 파일 생성", file_path)
         raise RuntimeError(f"OCR 파일 생성 타임아웃 ({timeout}초): {file_path}")
 
-    # 2. 파일 크기가 안정될 때까지 대기 (3초간 변화 없으면 완료)
+    # Phase 2: 파일 크기가 안정될 때까지 대기 (3초간 변화 없으면 완료)
+    logger.info("[저장대기 2/2] 크기 안정화 대기 (3초간 동일 크기 = 완료)")
     prev_size = -1
     stable_count = 0
     while time.time() - start < timeout:
@@ -163,7 +220,7 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
         if current_size == prev_size:
             stable_count += 1
             if stable_count >= 3:
-                logger.info(f"OCR 저장 완료 ({time.time() - start:.0f}초, {current_size / 1024:.0f}KB)")
+                logger.info(f"[저장대기] 완료 (총 {time.time() - start:.0f}초, {current_size / 1024:.0f}KB)")
                 return
         else:
             stable_count = 0
