@@ -16,6 +16,7 @@ from automation.error_log import setup_error_log
 from automation.queue_manager import QueueManager
 from automation.watcher import FolderWatcher
 from automation.pipeline.runner import PipelineRunner
+from automation.pipeline.ocr import _close_abbyy
 from automation.gui.job_tree import JobTree
 from automation.gui.controls import FolderSelector, ActionButtons
 
@@ -295,37 +296,47 @@ class MainWindow:
             self.status_var.set("캐시 폴더 없음")
             return
 
-        # 확인 — 작업 중 클릭 시 ABBYY 강제 종료로 진행 중 책이 깨질 수 있음을 경고
+        # 확인
         if not messagebox.askyesno(
             "캐시 삭제",
-            f"ABBYY 캐시를 모두 삭제할까요?\n\n"
-            f"경로: {cache_dir}\n\n"
-            f"⚠ 진행 중인 ABBYY 작업이 있다면 강제 종료되어 결과가 손상될 수 있습니다.",
+            f"ABBYY 캐시를 모두 삭제할까요?\n\n경로: {cache_dir}",
         ):
             return
 
-        # 1. ABBYY 프로세스 종료 (파일 잠금 해제) — _on_close와 동일 패턴
-        for exe in ("FineReaderOCR.exe", "FineReader.exe"):
-            try:
-                subprocess.run(["taskkill", "/F", "/T", "/IM", exe],
-                               capture_output=True, timeout=5)
-            except Exception as e:
-                logger.warning(f"{exe} 종료 실패: {e}")
+        # 1. ABBYY 프로세스 종료 + 완전 종료 대기 (파일 잠금 해제)
+        #    taskkill만 보내면 비동기라 즉시 삭제 시 파일이 아직 잠겨있음.
+        #    _close_abbyy는 tasklist 폴링으로 진짜 종료 확인 + 3초 추가 대기까지 수행.
+        self.status_var.set("ABBYY 종료 대기중...")
+        self.root.update_idletasks()
+        try:
+            _close_abbyy(timeout=15)
+        except Exception as e:
+            logger.warning(f"ABBYY 종료 대기 중 오류: {e}")
 
-        # 2. 폴더 내용물만 삭제 (폴더 자체는 보존)
-        deleted, failed = 0, 0
-        for item in cache_dir.iterdir():
+        # 2. FineReaderShell 폴더 통째로 삭제
+        #    ABBYY가 다음 실행 시 자동 재생성하므로 빈 폴더 남길 필요 없음.
+        #    설정/옵션은 AppData\Roaming\ABBYY에 별도 보관되어 있어 영향 없음.
+        self.status_var.set("캐시 폴더 삭제중...")
+        self.root.update_idletasks()
+        try:
+            shutil.rmtree(cache_dir)
+            msg = "캐시 삭제 완료 (FineReaderShell 폴더 삭제됨)"
+            logger.info(msg)
+            self.status_var.set(msg)
+            messagebox.showinfo("캐시 삭제", msg)
+        except Exception as e:
+            err_msg = f"캐시 삭제 실패: {e}"
+            logger.error(err_msg)
+            self.status_var.set(err_msg)
+            # 남아있는 항목 진단용으로 폴더 내용 한 줄 로깅
             try:
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
-                deleted += 1
-            except Exception as e:
-                failed += 1
-                logger.warning(f"캐시 삭제 실패: {item} - {e}")
-
-        msg = f"캐시 삭제 완료 ({deleted}개 삭제, {failed}개 실패)"
-        logger.info(msg)
-        self.status_var.set(msg)
-        messagebox.showinfo("캐시 삭제", msg)
+                remaining = [f.name for f in cache_dir.iterdir()] if cache_dir.exists() else []
+                logger.warning(f"삭제 후 남은 항목: {remaining}")
+            except Exception:
+                pass
+            messagebox.showwarning(
+                "캐시 삭제 실패",
+                f"폴더 삭제 중 오류가 발생했습니다.\n\n{e}\n\n"
+                f"다른 프로세스(탐색기, 백신, 검색 인덱서 등)가 파일을 잡고 있을 수 있습니다.\n"
+                f"PC 재시작 후 다시 시도해보세요.",
+            )
