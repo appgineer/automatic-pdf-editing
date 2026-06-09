@@ -66,16 +66,19 @@ class PipelineRunner:
                 return True
 
         customer_dir = self.output_folder / job.customer_name
-        config = job.config
         final_stem = self._compute_final_stem(job)
 
-        if config.is_split and config.split_method in ("page", "size"):
-            if not customer_dir.exists():
-                return False
-            return any(p.stat().st_size > 0 for p in customer_dir.glob(f"{final_stem}_*.pdf"))
+        # 단일 평탄 파일
+        flat = customer_dir / f"{final_stem}.pdf"
+        if flat.exists() and flat.stat().st_size > 0:
+            return True
 
-        final_path = customer_dir / f"{final_stem}.pdf"
-        return final_path.exists() and final_path.stat().st_size > 0
+        # 여러 파일로 쪼개져 책 폴더로 묶인 경우
+        book_dir = customer_dir / job.book_name
+        if book_dir.is_dir():
+            return any(p.stat().st_size > 0 for p in book_dir.glob("*.pdf"))
+
+        return False
 
     def _process_job(self, job: Job):
         if self._is_job_done(job):
@@ -158,14 +161,25 @@ class PipelineRunner:
                 self._notify()
                 parts = split_pdf_by_size(named_pdf, config.split_size_mb, split_tmp)
 
-            # 평탄 출력: 고객 폴더로 옮기되 다른 책과 이름이 겹치면 덮어쓰지 않고 중단
-            for part in parts:
-                dest = output_dir / part.name
+            if len(parts) >= 2:
+                # 여러 파일로 쪼개진 책만 자기 폴더로 묶음
+                book_dir = output_dir / job.book_name
+                book_dir.mkdir(parents=True, exist_ok=True)
+                for part in parts:
+                    dest = book_dir / part.name
+                    if dest.exists():
+                        raise FileExistsError(
+                            f"출력 파일명 충돌: '{book_dir.name}/{dest.name}'"
+                        )
+                    shutil.move(str(part), str(dest))
+            elif len(parts) == 1:
+                # 결과가 1개면 평탄하게 (이름 정규화)
+                dest = output_dir / f"{final_stem}.pdf"
                 if dest.exists():
                     raise FileExistsError(
                         f"출력 파일명 충돌: '{dest.name}' — 다른 책과 이름이 겹칩니다. 책 폴더명을 바꿔주세요."
                     )
-                shutil.move(str(part), str(dest))
+                shutil.move(str(parts[0]), str(dest))
         else:
             final_path = output_dir / f"{final_stem}.pdf"
             if final_path.exists():
