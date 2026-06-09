@@ -65,7 +65,7 @@ def split_pdf_by_page_ranges(input_path: Path, ranges_str: str, output_dir: Path
         part_doc = fitz.open()
         part_doc.insert_pdf(doc, from_page=start, to_page=end - 1)
 
-        out_name = f"{stem}{idx}.pdf"
+        out_name = f"{stem}_{idx}.pdf"
         out_path = output_dir / out_name
         part_doc.save(str(out_path), garbage=4, deflate=True)
         part_doc.close()
@@ -120,7 +120,7 @@ def split_pdf_by_size(input_path: Path, max_size_mb: int, output_dir: Path) -> l
 
         part_doc = fitz.open()
         part_doc.insert_pdf(doc, from_page=start, to_page=end - 1)
-        out_path = output_dir / f"{stem}{part}.pdf"
+        out_path = output_dir / f"{stem}_{part}.pdf"
         part_doc.save(str(out_path), garbage=4, deflate=True)
         part_doc.close()
         del part_doc

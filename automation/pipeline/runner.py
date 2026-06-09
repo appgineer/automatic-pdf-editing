@@ -65,15 +65,16 @@ class PipelineRunner:
             if zp.is_file():
                 return True
 
-        output_dir = self.output_folder / job.customer_name / job.book_name
+        customer_dir = self.output_folder / job.customer_name
         config = job.config
+        final_stem = self._compute_final_stem(job)
 
         if config.is_split and config.split_method in ("page", "size"):
-            if not output_dir.exists():
+            if not customer_dir.exists():
                 return False
-            return any(p.stat().st_size > 0 for p in output_dir.glob("*.pdf"))
+            return any(p.stat().st_size > 0 for p in customer_dir.glob(f"{final_stem}_*.pdf"))
 
-        final_path = output_dir / f"{self._compute_final_stem(job)}.pdf"
+        final_path = customer_dir / f"{final_stem}.pdf"
         return final_path.exists() and final_path.stat().st_size > 0
 
     def _process_job(self, job: Job):
@@ -136,8 +137,8 @@ class PipelineRunner:
         # --- 파일명 접미사 조합 ---
         final_stem = self._compute_final_stem(job)
 
-        # --- 최종 출력 (출력폴더/고객명/책명/) ---
-        output_dir = self.output_folder / job.customer_name / job.book_name
+        # --- 최종 출력 (출력폴더/고객명/) ---
+        output_dir = self.output_folder / job.customer_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
         if config.is_split and (config.split_method == "page" or config.split_method == "size"):
@@ -145,16 +146,32 @@ class PipelineRunner:
             named_pdf = tmp / f"{final_stem}.pdf"
             shutil.copy2(current_pdf, named_pdf)
 
+            split_tmp = tmp / "split_out"
+            split_tmp.mkdir(parents=True, exist_ok=True)
+            parts = []
             if config.split_method == "page" and config.split_page_ranges:
                 job.current_step = "페이지 범위 분할"
                 self._notify()
-                split_pdf_by_page_ranges(named_pdf, config.split_page_ranges, output_dir)
+                parts = split_pdf_by_page_ranges(named_pdf, config.split_page_ranges, split_tmp)
             elif config.split_method == "size" and config.split_size_mb > 0:
                 job.current_step = "크기 기준 분할"
                 self._notify()
-                split_pdf_by_size(named_pdf, config.split_size_mb, output_dir)
+                parts = split_pdf_by_size(named_pdf, config.split_size_mb, split_tmp)
+
+            # 평탄 출력: 고객 폴더로 옮기되 다른 책과 이름이 겹치면 덮어쓰지 않고 중단
+            for part in parts:
+                dest = output_dir / part.name
+                if dest.exists():
+                    raise FileExistsError(
+                        f"출력 파일명 충돌: '{dest.name}' — 다른 책과 이름이 겹칩니다. 책 폴더명을 바꿔주세요."
+                    )
+                shutil.move(str(part), str(dest))
         else:
             final_path = output_dir / f"{final_stem}.pdf"
+            if final_path.exists():
+                raise FileExistsError(
+                    f"출력 파일명 충돌: '{final_path.name}' — 다른 책과 이름이 겹칩니다. 책 폴더명을 바꿔주세요."
+                )
             self._copy_with_retry(current_pdf, final_path)
 
     # ── Flow 1: 일반+OCR ─────────────────────────────────────
@@ -272,14 +289,14 @@ class PipelineRunner:
                     raise
 
     def _should_zip_customer(self, customer_name: str, expected_count: int | None) -> bool:
-        """출력폴더/고객명/ 안의 책 서브폴더 수가 expected_count 이상이면 True"""
+        """고객의 완료(DONE) 작업 수가 expected_count 이상이면 True"""
         if not expected_count or expected_count <= 0:
             return False
-        customer_dir = self.output_folder / customer_name
-        if not customer_dir.exists():
-            return False
-        book_count = sum(1 for d in customer_dir.iterdir() if d.is_dir())
-        return book_count >= expected_count
+        done = sum(
+            1 for j in self.queue.jobs
+            if j.customer_name == customer_name and j.status == JobStatus.DONE
+        )
+        return done >= expected_count
 
     def _create_zip(self, customer_name: str):
         """고객의 모든 완료된 책을 ZIP으로 압축 후 폴더 삭제"""
