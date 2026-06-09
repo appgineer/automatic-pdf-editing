@@ -4,6 +4,7 @@ import glob
 import logging
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 import tkinter as tk
@@ -318,25 +319,39 @@ class MainWindow:
         #    설정/옵션은 AppData\Roaming\ABBYY에 별도 보관되어 있어 영향 없음.
         self.status_var.set("캐시 폴더 삭제중...")
         self.root.update_idletasks()
+
+        def _on_rm_error(func, path, _exc):
+            # 읽기전용 속성 때문에 WinError 5(액세스 거부)가 나는 경우:
+            # 쓰기 가능으로 바꾼 뒤 재시도.
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            except Exception:
+                pass
+
         try:
-            shutil.rmtree(cache_dir)
+            shutil.rmtree(cache_dir, onerror=_on_rm_error)
+        except Exception as e:
+            logger.warning(f"캐시 삭제 rmtree 예외: {e}")
+
+        if not cache_dir.exists():
             msg = "캐시 삭제 완료 (FineReaderShell 폴더 삭제됨)"
             logger.info(msg)
             self.status_var.set(msg)
             messagebox.showinfo("캐시 삭제", msg)
-        except Exception as e:
-            err_msg = f"캐시 삭제 실패: {e}"
-            logger.error(err_msg)
-            self.status_var.set(err_msg)
-            # 남아있는 항목 진단용으로 폴더 내용 한 줄 로깅
+        else:
+            # 읽기전용 해제로도 안 지워지면 진짜 잠긴 파일이 남은 것
             try:
-                remaining = [f.name for f in cache_dir.iterdir()] if cache_dir.exists() else []
-                logger.warning(f"삭제 후 남은 항목: {remaining}")
+                remaining = [f.name for f in cache_dir.iterdir()]
             except Exception:
-                pass
+                remaining = []
+            err_msg = f"캐시 삭제 실패: 일부 파일이 남음 {remaining}"
+            logger.error(err_msg)
+            self.status_var.set("캐시 삭제 실패 (일부 파일 잠김)")
             messagebox.showwarning(
                 "캐시 삭제 실패",
-                f"폴더 삭제 중 오류가 발생했습니다.\n\n{e}\n\n"
-                f"다른 프로세스(탐색기, 백신, 검색 인덱서 등)가 파일을 잡고 있을 수 있습니다.\n"
-                f"PC 재시작 후 다시 시도해보세요.",
+                f"일부 파일을 삭제하지 못했습니다.\n\n남은 항목: {remaining}\n\n"
+                f"ABBYY가 아직 떠 있거나 다른 프로세스(탐색기, 백신, 검색 인덱서 등)가 "
+                f"파일을 잡고 있을 수 있습니다.\n"
+                f"ABBYY를 완전히 종료한 뒤 다시 시도해보세요.",
             )
