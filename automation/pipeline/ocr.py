@@ -15,6 +15,7 @@ import time
 import logging
 from pathlib import Path
 
+import psutil
 import pyautogui
 import pyperclip
 
@@ -27,6 +28,69 @@ ABBYY_WINDOW_KEYWORD = "FineReader"
 
 POLL_INTERVAL = 0.5
 DEFAULT_TIMEOUT = 60
+
+
+# ── ABBYY 활동(CPU) 기반 멈춤 감지 ─────────────────────────────
+# 고정 시간 타임아웃 대신 "ABBYY가 실제로 일하고 있는가(CPU)"로 판단한다.
+# 처리 중(CPU 바쁨)이면 아무리 오래 걸려도 안 끊고, 활동 없이 STUCK_IDLE_LIMIT
+# 지나면 멈춤으로 보고 중단한다. (Windows 실제 환경에서 임계값 튜닝 필요)
+CPU_BUSY_THRESHOLD = 5.0      # ABBYY 프로세스 CPU 합(%)이 이 이상이면 "처리 중"
+STUCK_IDLE_LIMIT = 600        # 활동 없이 이 시간(초) 지나면 멈춤으로 판단
+ABSOLUTE_TIMEOUT = 10800      # 최종 백업 한도(초) — 무한 busy 방지 (3시간)
+
+
+def _abbyy_busy(sample: float = 0.3) -> bool:
+    """ABBYY 프로세스들의 CPU 사용률 합이 임계값 이상이면 True(=처리 중)."""
+    try:
+        procs = []
+        for p in psutil.process_iter(["name"]):
+            try:
+                if (p.info["name"] or "").lower() in ("finereaderocr.exe", "finereader.exe"):
+                    p.cpu_percent(None)  # 프라이밍(첫 호출은 0 반환)
+                    procs.append(p)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        if not procs:
+            return False
+        time.sleep(sample)
+        total = 0.0
+        for p in procs:
+            try:
+                total += p.cpu_percent(None)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return total >= CPU_BUSY_THRESHOLD
+    except Exception as e:
+        # psutil 문제 시 "바쁨"으로 간주해 잘못된 조기 중단 방지(절대 한도는 별도로 동작)
+        logger.warning(f"CPU 측정 실패(바쁨으로 간주): {e}")
+        return True
+
+
+class _ActivityWatch:
+    """활동(CPU 또는 외부 신호) 없이 STUCK_IDLE_LIMIT 지나면 멈춤으로 raise.
+
+    매 폴링마다 tick()을 호출. 처리 중이면 타이머가 리셋되어 오래 걸리는
+    정상 작업은 끊기지 않고, 멈춘 경우만 중단된다.
+    """
+
+    def __init__(self, context: str):
+        self.context = context
+        now = time.time()
+        self.start = now
+        self.last_active = now
+
+    def tick(self, extra_active: bool = False):
+        if extra_active or _abbyy_busy():
+            self.last_active = time.time()
+        now = time.time()
+        if now - self.last_active > STUCK_IDLE_LIMIT:
+            _log_timeout_diagnostic(f"{self.context} (멈춤 감지)")
+            raise RuntimeError(
+                f"ABBYY 멈춤 감지: 활동 없이 {STUCK_IDLE_LIMIT}초 경과 - {self.context}"
+            )
+        if now - self.start > ABSOLUTE_TIMEOUT:
+            _log_timeout_diagnostic(f"{self.context} (절대 한도)")
+            raise RuntimeError(f"절대 한도 {ABSOLUTE_TIMEOUT}초 초과 - {self.context}")
 
 
 # ── 진단 헬퍼 ─────────────────────────────────────────────────
@@ -161,11 +225,12 @@ def _log_timeout_diagnostic(context: str, file_path: Path | None = None):
             logger.warning(f"타임아웃 진단 [{context}] - {exe} 확인 실패: {e}")
 
 
-def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
+def _wait_for_file_complete(file_path: Path):
     """파일이 생성되고 크기가 안정될 때까지 대기 (OCR 완료 감지)
 
     파일 크기가 3초간 변하지 않으면 완료로 판단.
-    최대 40분 대기.
+    고정 타임아웃 대신 ABBYY 활동(CPU)으로 멈춤을 감지 — 처리 중이면 오래 걸려도
+    안 끊고, 활동 없이 STUCK_IDLE_LIMIT 지나면 중단.
 
     Phase 1: 파일 생성 대기 (60초마다 폴더 상태 + 잘못된 확장자 감지 진행 로그)
     Phase 2: 크기 안정화 대기
@@ -174,12 +239,13 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
     stem = file_path.stem  # 예: "image_s2_OCR"
     parent = file_path.parent
 
-    logger.info(f"[저장대기 1/2] 파일 생성 대기 시작: {file_path.name} (timeout={timeout}초)")
+    logger.info(f"[저장대기 1/2] 파일 생성 대기 시작: {file_path.name}")
 
     # Phase 1: 파일 생성 대기 + 주기적 진행 로그 + 잘못된 확장자 감지
     last_progress = 0.0
     wrong_ext_warned: set[str] = set()
-    while time.time() - start < timeout:
+    watch = _ActivityWatch("OCR 파일 생성")
+    while True:
         if file_path.exists() and file_path.stat().st_size > 0:
             logger.info(f"[저장대기 1/2] 파일 생성 감지 ({time.time() - start:.0f}초): {file_path.name}")
             break
@@ -206,16 +272,15 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
             except Exception as e:
                 logger.warning(f"[저장대기 1/2] 폴더 확인 실패: {e}")
 
+        watch.tick()  # CPU 활동 없으면 STUCK_IDLE_LIMIT 후 멈춤으로 중단
         time.sleep(1)
-    else:
-        _log_timeout_diagnostic("OCR 파일 생성", file_path)
-        raise RuntimeError(f"OCR 파일 생성 타임아웃 ({timeout}초): {file_path}")
 
     # Phase 2: 파일 크기가 안정될 때까지 대기 (3초간 변화 없으면 완료)
     logger.info("[저장대기 2/2] 크기 안정화 대기 (3초간 동일 크기 = 완료)")
     prev_size = -1
     stable_count = 0
-    while time.time() - start < timeout:
+    watch2 = _ActivityWatch("OCR 파일 안정화")
+    while True:
         current_size = file_path.stat().st_size
         if current_size == prev_size:
             stable_count += 1
@@ -224,11 +289,9 @@ def _wait_for_file_complete(file_path: Path, timeout: int = 2400):
                 return
         else:
             stable_count = 0
+        watch2.tick(extra_active=(current_size != prev_size))  # 크기 변화 = 활동
         prev_size = current_size
         time.sleep(1)
-
-    _log_timeout_diagnostic("OCR 파일 안정화", file_path)
-    raise RuntimeError(f"OCR 파일 안정화 타임아웃 ({timeout}초): {file_path}")
 
 
 def _save_as_searchable_pdf(output_path: Path):

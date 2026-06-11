@@ -28,6 +28,7 @@ from automation.pipeline.ocr import (
     _set_language,
     _log_timeout_diagnostic,
     _list_abbyy_windows,
+    _ActivityWatch,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,6 @@ pyautogui.PAUSE = 0.3
 ABBYY_OCR_EXE = r"C:\Program Files\ABBYY FineReader 16\FineReaderOCR.exe"
 
 LOADING_POLL_INTERVAL = 0.5
-LOADING_TIMEOUT = 2400  # 40분
 
 
 # ── ABBYY 편집기 실행 ──────────────────────────────────────────
@@ -177,12 +177,13 @@ def _check_loading_window(gw, loading_title: str) -> bool:
     return False
 
 
-def _wait_for_loading_gone(gw, loading_title: str, timeout: int = LOADING_TIMEOUT):
-    """Phase 2: 로딩 창이 사라질 때까지 대기"""
-    logger.info(f"[처리대기 Phase2] 로딩 창 '{loading_title}' 사라짐 대기 (timeout={timeout}초)")
+def _wait_for_loading_gone(gw, loading_title: str) -> bool:
+    """Phase 2: 로딩 창이 사라질 때까지 대기 (활동 없이 멈추면 중단)"""
+    logger.info(f"[처리대기 Phase2] 로딩 창 '{loading_title}' 사라짐 대기 (활동 기반)")
     start = time.time()
     last_progress = 0.0
-    while time.time() - start < timeout:
+    watch = _ActivityWatch("레벨 처리 (로딩 창 사라짐 대기)")
+    while True:
         if not _check_loading_window(gw, loading_title):
             logger.info(f"[처리대기 Phase2] 로딩 창 사라짐 = 레벨 처리 완료 ({time.time() - start:.0f}초)")
             time.sleep(3)
@@ -193,13 +194,11 @@ def _wait_for_loading_gone(gw, loading_title: str, timeout: int = LOADING_TIMEOU
         if elapsed - last_progress >= 60:
             last_progress = elapsed
             logger.info(f"[처리대기 Phase2] {elapsed:.0f}초 경과 - 로딩 창 여전히 떠있음")
+        watch.tick()  # 창이 떠 있어도 CPU idle이면 멈춤(얼어붙음)으로 중단
         time.sleep(LOADING_POLL_INTERVAL)
-    logger.error(f"[처리대기 Phase2] 타임아웃 - 보이는 ABBYY 관련 창: {_list_abbyy_windows()}")
-    _log_timeout_diagnostic("레벨 처리 (로딩 창 사라짐 대기)")
-    raise RuntimeError(f"레벨 처리 타임아웃 ({timeout}초)")
 
 
-def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 180) -> bool:
+def _wait_for_processing(detect_timeout: int = 180) -> bool:
     """레벨 처리 완료 대기
 
     Returns:
@@ -225,12 +224,13 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 1
 
     # Phase 2: 로딩 창이 떴으면 사라질 때까지 대기
     if loading_appeared:
-        return _wait_for_loading_gone(gw, LOADING_TITLE, timeout)
+        return _wait_for_loading_gone(gw, LOADING_TITLE)
 
-    # Phase 3: 로딩 창 미감지 → 3분마다 Ctrl+S 시도 + 로딩 창 감지 병행
+    # Phase 3: 로딩 창 미감지 → 3분마다 Ctrl+S 시도 + 로딩 창/멈춤 감지 병행
     logger.warning(f"[처리대기 Phase1] {detect_timeout}초 동안 로딩 창 미감지 - 보이는 창: {_list_abbyy_windows()}")
     logger.info(f"[처리대기 Phase3] Ctrl+S 폴백 모드 시작 ({CTRL_S_INTERVAL}초 간격으로 Ctrl+S 시도)")
-    while time.time() - start < timeout:
+    watch = _ActivityWatch("레벨 처리 (Ctrl+S 폴백)")
+    while True:
         logger.info(f"[처리대기 Phase3] Ctrl+S 시도 ({time.time() - start:.0f}초 경과)")
         _find_abbyy_window()
         time.sleep(1)
@@ -241,17 +241,14 @@ def _wait_for_processing(timeout: int = LOADING_TIMEOUT, detect_timeout: int = 1
             logger.info(f"[처리대기 Phase3] Ctrl+S로 저장 대화상자 감지 ({time.time() - start:.0f}초)")
             return True
 
-        # 3분 대기하면서 로딩 창 감지 병행
+        # 다음 Ctrl+S까지 대기하면서 로딩 창 감지 + 멈춤 감지 병행
         wait_start = time.time()
         while time.time() - wait_start < CTRL_S_INTERVAL:
             if _check_loading_window(gw, LOADING_TITLE):
                 logger.info("[처리대기 Phase3→Phase2] 대기 중 로딩 창 감지 → Phase2 전환")
-                return _wait_for_loading_gone(gw, LOADING_TITLE, timeout)
+                return _wait_for_loading_gone(gw, LOADING_TITLE)
+            watch.tick()  # 활동 없이 STUCK_IDLE_LIMIT 지나면 멈춤으로 중단
             time.sleep(LOADING_POLL_INTERVAL)
-
-    logger.error(f"[처리대기 Phase3] 타임아웃 - 보이는 ABBYY 관련 창: {_list_abbyy_windows()}")
-    _log_timeout_diagnostic("레벨 처리 (Ctrl+S 폴백)")
-    raise RuntimeError(f"레벨 처리 타임아웃 ({timeout}초)")
 
 
 # ── 저장 ──────────────────────────────────────────────────────
