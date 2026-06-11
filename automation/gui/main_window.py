@@ -211,12 +211,43 @@ class MainWindow:
             # 모든 작업 완료 체크
             if jobs and all(j.status.value in ("완료", "오류") for j in jobs):
                 self.status_var.set("모든 작업 완료")
+                self._update_error_summary()
                 if self.shutdown_var.get():
                     self._shutdown_computer()
             else:
                 self.status_var.set("실행중 - 폴더 감시중...")
         else:
             self.status_var.set("대기중")
+
+    def _update_error_summary(self):
+        """배치 종료 시 에러난 책을 출력폴더의 에러요약.txt로 남김(에러 없으면 기존 요약 삭제)."""
+        if not self.runner:
+            return
+        summary_path = self.runner.output_folder / "에러요약.txt"
+        errored = [j for j in self.queue.jobs if j.status.value == "오류"]
+        if not errored:
+            if summary_path.exists():
+                try:
+                    summary_path.unlink()
+                except Exception:
+                    pass
+            return
+
+        from datetime import datetime
+        lines = [
+            f"에러 요약  ({datetime.now():%Y-%m-%d %H:%M:%S})",
+            f"실패한 책: {len(errored)}개",
+            "",
+        ]
+        for j in errored:
+            lines.append(f"- {j.display_name}")
+            if j.error_message:
+                lines.append(f"    이유: {j.error_message}")
+        lines += ["", "※ 위 책들은 압축되지 않았습니다. 프로그램을 다시 실행하면 자동으로 다시 시도합니다."]
+        try:
+            summary_path.write_text("\n".join(lines), encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"에러요약 작성 실패: {e}")
 
     def _shutdown_computer(self):
         """컴퓨터 전원 끄기 (취소 가능, 시스템 알림 없음)"""
