@@ -94,8 +94,8 @@ def _enter_image_editor():
     """Ctrl+I → 이미지 편집기 모드 진입"""
     logger.info("[이미지편집기] Ctrl+I (모드 진입)")
     pyautogui.hotkey("ctrl", "i")
-    logger.info("[이미지편집기] 진입 대기 10초")
-    time.sleep(10)
+    logger.info("[이미지편집기] 진입 대기 5초")
+    time.sleep(5)
     logger.info("[이미지편집기] 완료")
 
 
