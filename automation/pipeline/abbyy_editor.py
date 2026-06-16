@@ -28,6 +28,7 @@ from automation.pipeline.ocr import (
     _set_language,
     _log_timeout_diagnostic,
     _list_abbyy_windows,
+    _abbyy_busy,
     _ActivityWatch,
 )
 
@@ -64,28 +65,24 @@ def _open_in_ocr_editor(pdf_path: Path):
         raise RuntimeError("ABBYY FineReader가 실행되지 않습니다")
     logger.info(f"[열기 2/3] ABBYY 창 감지 OK ({time.time() - proc_start:.1f}초)")
 
-    # 창 제목에 파일명이 나타날 때까지 대기 (파일 로드 완료 감지)
-    import pygetwindow as gw
-    file_stem = pdf_path.stem
-    logger.info(f"[열기 3/3] 파일 로드 감지 대기 — 창 제목에 '{file_stem}' 등장 대기 (20초)")
+    # 파일 import 완료 대기 (창 제목은 항상 '무제 프로젝트'라 파일명 감지 불가 →
+    # 최소 MIN_WAIT초 대기 후, 큰 파일이면 CPU가 잠잠해질 때까지만 연장)
+    MIN_WAIT = 5          # 최소 대기(초) — 빠른 import 커버
+    SETTLE_CAP = 60       # CPU 연장 상한(초) — 무한 대기 방지
+    logger.info(f"[열기 3/3] 파일 import 대기 — 최소 {MIN_WAIT}초 후 CPU 잠잠해지면 진행")
     start = time.time()
-    while time.time() - start < 20:
-        for win in gw.getAllWindows():
-            if file_stem in win.title:
-                logger.info(f"[열기 3/3] 파일 로드 완료 ({time.time() - start:.1f}초): '{win.title}'")
-                time.sleep(2)
-                _find_abbyy_window()
-                logger.info("[열기] 완료")
-                return
+    time.sleep(MIN_WAIT)
+
+    while _abbyy_busy():
+        if time.time() - start > MIN_WAIT + SETTLE_CAP:
+            logger.warning("[열기 3/3] CPU가 계속 바쁨 — 상한 도달, 그대로 진행")
+            break
+        logger.info("[열기 3/3] ABBYY 처리 중(CPU 바쁨) — 대기")
         time.sleep(1)
 
-    visible = _list_abbyy_windows()
-    logger.warning(f"[열기 3/3] ⚠ 파일명 미감지 (20초 경과) - 보이는 ABBYY 관련 창: {visible}")
-    if any(("무제" in t) or ("Untitled" in t) for t in visible):
-        logger.warning("[열기 3/3] ⚠ '무제 프로젝트' 상태로 보임 → ABBYY가 인자로 받은 파일을 못 연 듯 (KVM/포커스 영향 의심)")
-    logger.warning("[열기 3/3] 그대로 계속 진행 — 이후 단축키가 빈 프로젝트에 적용될 수 있음")
+    logger.info(f"[열기 3/3] 파일 import 완료로 판단 ({time.time() - start:.1f}초)")
     _find_abbyy_window()
-    logger.info("[열기] 종료 (경고와 함께)")
+    logger.info("[열기] 완료")
 
 
 # ── 레벨 조정 ──────────────────────────────────────────────────
