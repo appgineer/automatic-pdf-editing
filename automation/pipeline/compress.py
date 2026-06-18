@@ -11,7 +11,8 @@ def create_customer_zip(customer_name: str, customer_dir: Path, output_dir: Path
 
     평탄 PDF는 책 1권, 책 하위폴더(쪼개진 파트들)도 책 1권으로 보고
     책 단위로 그룹핑한다(한 책이 두 ZIP으로 갈리지 않음).
-    arcname은 고객 폴더 기준 상대경로 → 폴더 책은 `고객/책/책_1.pdf`, 평탄 책은 `고객/책.pdf`.
+    arcname은 고객 폴더 기준 상대경로(ZIP 루트 직속, 고객명 폴더 없음)
+    → 폴더 책은 `책/책_1.pdf`, 평탄 책은 `책.pdf`.
     """
     # 책 단위 항목 수집 (item = 한 책에 속한 파일 리스트)
     items: list[list[Path]] = []
@@ -55,7 +56,7 @@ def create_customer_zip(customer_name: str, customer_dir: Path, output_dir: Path
             for item in group:
                 for f in item:
                     rel = f.relative_to(customer_dir)
-                    zf.write(f, f"{customer_name}/{rel.as_posix()}")
+                    zf.write(f, rel.as_posix())
         zip_paths.append(zip_path)
 
     return zip_paths
