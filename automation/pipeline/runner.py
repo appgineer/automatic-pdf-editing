@@ -138,8 +138,8 @@ class PipelineRunner:
         elif config.ocr:
             current_pdf = self._flow_standard_ocr(job, tmp, current_pdf)
 
-        # --- 고스트스크립트 이미지 재압축 (ABBYY 거친 경우만, 아이패드 렉 방지) ---
-        if config.scan_type == "고급" or config.ocr:
+        # --- 고스트스크립트 이미지 재압축 (고급 모드만, 아이패드 렉 방지) ---
+        if config.scan_type == "고급":
             job.current_step = "이미지 압축(GS)"
             self._notify()
             compressed = tmp / f"{job.book_name}_gs.pdf"
