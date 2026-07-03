@@ -2,11 +2,16 @@
 
 ABBYY 고급 출력물은 이미지가 JPEG2000(JPX)으로 인코딩되는데,
 아이패드에서 JPEG2000 디코딩이 무거워 렉이 생긴다.
-PyMuPDF(MuPDF)로 lossy 이미지(JPEG2000/JPEG)만 JPEG로 재인코딩한다.
-흑백 텍스트(JBIG2 등 bitonal)는 손대지 않아 선명도를 유지한다.
+PyMuPDF(MuPDF)로 JPEG2000 이미지만 골라 JPEG(DCTDecode)로 재인코딩한다.
+흑백 텍스트(JBIG2 등)나 이미 JPEG인 이미지는 손대지 않는다.
 
-(이전에는 Ghostscript로 처리했으나, GS의 JPEG2000/JBIG2 디코더가 일부
-이미지를 조용히 드롭해 중간중간 빈 페이지가 생기는 문제가 있어 교체함.)
+주의:
+- rewrite_images()는 JPEG2000을 JPEG로 바꾸지 않고 그대로 재압축만 하므로 렉이 안 풀린다.
+  그래서 이미지 스트림을 직접 JPEG으로 교체(update_stream)한다.
+- 새 이미지를 추가(replace_image)하면 페이지에 이미지가 중복되어 용량 2배 + 렉 악화 →
+  반드시 같은 xref를 '제자리 교체'한다.
+- 이전에는 Ghostscript로 처리했으나, GS의 JPEG2000/JBIG2 디코더가 일부 이미지를
+  조용히 드롭해 중간중간 빈 페이지가 생기는 문제가 있어 교체함.
 """
 
 import logging
@@ -16,17 +21,46 @@ import fitz  # PyMuPDF
 
 logger = logging.getLogger(__name__)
 
-# JPEG 재인코딩 품질 (1~100). 높을수록 고화질/대용량. 용량이 크면 낮추거나 DOWNSAMPLE 사용.
-JPEG_QUALITY = 85
+# JPEG 재인코딩 품질 (1~100). 높을수록 고화질/대용량.
+# 원본 600 DPI 기준 100p 실측 용량: q85≈168MB, q92≈202MB, q95≈242MB.
+# q85도 육안 무손실(PSNR 54.8dB)이나 판매용이라 글자 경계 안전마진으로 92 사용.
+JPEG_QUALITY = 92
 
-# 용량이 과도하면 True로 켜서 해상도를 낮춘다 (열람용 화질 유지, 용량 대폭 감소).
+# 용량이 과도하면 True로 켜서 해상도를 낮춘다 (열람용 화질 유지, 용량 감소).
 DOWNSAMPLE = False
-DPI_THRESHOLD = 200  # 이 DPI를 넘는 이미지만 다운샘플 대상
-DPI_TARGET = 150     # 낮출 목표 DPI
+DPI_TARGET = 150  # 다운샘플 목표 DPI (2의 배수로만 축소되므로 근사치)
+
+
+def _to_jpeg_pixmap(doc: fitz.Document, xref: int):
+    """xref 이미지를 JPEG로 넣기 좋은 Pixmap(회색 or RGB, 알파 없음)으로 디코딩."""
+    pix = fitz.Pixmap(doc, xref)
+    if pix.alpha:
+        pix = fitz.Pixmap(pix, 0)  # 알파 제거
+    if pix.colorspace is None or pix.colorspace.n not in (1, 3):
+        pix = fitz.Pixmap(fitz.csRGB, pix)  # CMYK 등 → RGB
+    return pix
+
+
+def _maybe_downsample(pix, page, xref):
+    """DOWNSAMPLE가 켜져 있고 이미지 DPI가 목표보다 높으면 2의 배수로 축소."""
+    rects = page.get_image_rects(xref)
+    if not rects:
+        return pix
+    disp_w_in = max(r.width for r in rects) / 72.0
+    if disp_w_in <= 0:
+        return pix
+    dpi = pix.width / disp_w_in
+    factor, d = 0, dpi
+    while d / 2 >= DPI_TARGET:
+        factor += 1
+        d /= 2
+    if factor:
+        pix.shrink(factor)
+    return pix
 
 
 def compress_pdf(input_path: Path, output_path: Path) -> bool:
-    """JPEG2000 등 lossy 이미지를 JPEG로 재인코딩. 성공 시 output_path 생성하고 True 반환.
+    """JPEG2000 이미지를 JPEG로 재인코딩. 성공 시 output_path 생성하고 True 반환.
 
     변환 후 이미지가 사라져 빈 페이지가 생기면 False를 반환하여
     호출부가 원본을 그대로 사용(폴백)하도록 한다.
@@ -40,12 +74,37 @@ def compress_pdf(input_path: Path, output_path: Path) -> bool:
     # 변환 전 페이지별 이미지 개수 (빈 페이지 검증용)
     before = [len(doc[i].get_images()) for i in range(doc.page_count)]
 
-    kwargs = dict(quality=JPEG_QUALITY, lossy=True, lossless=False, bitonal=False)
-    if DOWNSAMPLE:
-        kwargs.update(dpi_threshold=DPI_THRESHOLD, dpi_target=DPI_TARGET)
-
+    seen: set[int] = set()
     try:
-        doc.rewrite_images(**kwargs)
+        for pno in range(doc.page_count):
+            page = doc[pno]
+            for img in page.get_images(full=True):
+                xref = img[0]
+                if xref in seen:
+                    continue
+                seen.add(xref)
+
+                filt = doc.xref_get_key(xref, "Filter")
+                if not (filt and "JPX" in str(filt[1])):
+                    continue  # JPEG2000만 변환, 나머지(JBIG2/기존 JPEG 등)는 유지
+
+                pix = _to_jpeg_pixmap(doc, xref)
+                if DOWNSAMPLE:
+                    pix = _maybe_downsample(pix, page, xref)
+
+                cs = "/DeviceGray" if pix.colorspace.n == 1 else "/DeviceRGB"
+                w, h = pix.width, pix.height
+                jpg = pix.tobytes("jpeg", jpg_quality=JPEG_QUALITY)
+                pix = None
+
+                # 같은 xref 스트림을 raw JPEG으로 제자리 교체 (compress=False = 재압축 안 함)
+                doc.update_stream(xref, jpg, compress=False)
+                doc.xref_set_key(xref, "Filter", "/DCTDecode")
+                doc.xref_set_key(xref, "ColorSpace", cs)
+                doc.xref_set_key(xref, "BitsPerComponent", "8")
+                doc.xref_set_key(xref, "Width", str(w))
+                doc.xref_set_key(xref, "Height", str(h))
+                doc.xref_set_key(xref, "DecodeParms", "null")  # JPX용 파라미터 제거
     except Exception as e:
         logger.error(f"이미지 재압축 실패: {input_path.name} ({e})")
         doc.close()

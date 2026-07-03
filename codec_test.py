@@ -76,6 +76,7 @@ def main():
         before = image_counts(src)
         before_codec = codec_dist(src)
 
+        print("  변환 중... (JPEG2000 재인코딩+저장, 완료까지 수 분 걸릴 수 있음)", flush=True)
         ok = compress_pdf(src, out)
         if not ok:
             print("결과: 실패 → 원본 폴백 대상 (빈 페이지 감지 또는 오류). 위 로그 확인.")
