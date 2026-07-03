@@ -14,16 +14,18 @@ PyMuPDF(MuPDF)로 JPEG2000 이미지만 골라 JPEG(DCTDecode)로 재인코딩�
   조용히 드롭해 중간중간 빈 페이지가 생기는 문제가 있어 교체함.
 """
 
+import io
 import logging
 from pathlib import Path
 
 import fitz  # PyMuPDF
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
 # JPEG 재인코딩 품질 (1~100). 높을수록 고화질/대용량.
-# 원본 600 DPI 기준 100p 실측 용량: q85≈168MB, q92≈202MB, q95≈242MB.
-# q85도 육안 무손실(PSNR 54.8dB)이나 판매용이라 글자 경계 안전마진으로 92 사용.
+# 600 DPI 유지(다운샘플 없음) + baseline 4:2:0 기준 100p 실측: q92≈190MB.
+# q85도 육안 무손실(PSNR 54dB)이나 판매용이라 글자 경계 안전마진으로 92 사용.
 JPEG_QUALITY = 92
 
 # 용량이 과도하면 True로 켜서 해상도를 낮춘다 (열람용 화질 유지, 용량 감소).
@@ -94,8 +96,16 @@ def compress_pdf(input_path: Path, output_path: Path) -> bool:
 
                 cs = "/DeviceGray" if pix.colorspace.n == 1 else "/DeviceRGB"
                 w, h = pix.width, pix.height
-                jpg = pix.tobytes("jpeg", jpg_quality=JPEG_QUALITY)
+                # baseline + 4:2:0 JPEG으로 인코딩 (아이패드 디코딩이 빠름, GS와 동일 방식).
+                # MuPDF의 tobytes("jpeg")는 progressive + 4:4:4라 태블릿에서 렉이 더 걸려
+                # Pillow로 인코딩한다. 4:2:0는 밝기(글자 선명도)는 풀해상도 유지, 색차만 절반.
+                mode = "L" if pix.colorspace.n == 1 else "RGB"
+                img = Image.frombytes(mode, (w, h), pix.samples)
                 pix = None
+                buf = io.BytesIO()
+                img.save(buf, "JPEG", quality=JPEG_QUALITY,
+                         subsampling=2, progressive=False, optimize=True)
+                jpg = buf.getvalue()
 
                 # 같은 xref 스트림을 raw JPEG으로 제자리 교체 (compress=False = 재압축 안 함)
                 doc.update_stream(xref, jpg, compress=False)
