@@ -13,7 +13,7 @@ from automation.pipeline.merge import merge_pdfs
 from automation.pipeline.split import split_pdf_by_count, split_pdf_by_page_ranges, split_pdf_by_size
 from automation.pipeline.abbyy_editor import run_levels_only, run_levels_with_ocr, run_ocr_only
 from automation.pipeline.page_utils import prepend_first_page, delete_first_page
-from automation.pipeline.ghostscript import compress_pdf
+from automation.pipeline.recompress import compress_pdf
 from automation.pipeline.compress import create_customer_zip
 
 logger = logging.getLogger(__name__)
@@ -138,15 +138,15 @@ class PipelineRunner:
         elif config.ocr:
             current_pdf = self._flow_standard_ocr(job, tmp, current_pdf)
 
-        # --- 고스트스크립트 이미지 재압축 (고급 모드만, 아이패드 렉 방지) ---
+        # --- 이미지 재압축: JPEG2000→JPEG 코덱 변환 (고급 모드만, 아이패드 렉 방지) ---
         if config.scan_type == "고급":
-            job.current_step = "이미지 압축(GS)"
+            job.current_step = "이미지 재압축"
             self._notify()
-            compressed = tmp / f"{job.book_name}_gs.pdf"
+            compressed = tmp / f"{job.book_name}_recomp.pdf"
             if compress_pdf(current_pdf, compressed):
                 current_pdf = compressed
             else:
-                logger.warning(f"GS 압축 실패 — 원본 사용: {job.book_name}")
+                logger.warning(f"이미지 재압축 실패 — 원본 사용: {job.book_name}")
 
         # --- 파일명 접미사 조합 ---
         final_stem = self._compute_final_stem(job)
