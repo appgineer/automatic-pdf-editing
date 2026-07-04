@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 
 # JPEG 재인코딩 품질 (1~100). 높을수록 고화질/대용량.
 # 600 DPI 유지(다운샘플 없음) + baseline 4:2:0 기준 100p 실측:
-#   q50≈83MB, q60≈91MB, q80≈127MB (800p는 약 8배). ABBYY 원본(JPEG2000)은 63MB.
+#   q40≈74MB, q50≈83MB, q60≈91MB, q80≈127MB (800p는 약 8배). ABBYY 원본(JPEG2000)은 63MB.
 #   GS(QFactor 3.0)와 비슷한 용량대 = q40~50.
-JPEG_QUALITY = 50
+JPEG_QUALITY = 40
 
 # 용량이 과도하면 True로 켜서 해상도를 낮춘다 (열람용 화질 유지, 용량 감소).
 DOWNSAMPLE = False
