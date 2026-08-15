@@ -9,7 +9,7 @@ from pathlib import Path
 
 from automation.models import Job, JobStatus
 from automation.queue_manager import QueueManager
-from automation.pipeline.merge import merge_pdfs
+from automation.pipeline.merge import merge_pdfs, count_pages
 from automation.pipeline.split import split_pdf_by_count, split_pdf_by_page_ranges, split_pdf_by_size
 from automation.pipeline.abbyy_editor import run_levels_only, run_levels_with_ocr, run_ocr_only
 from automation.pipeline.page_utils import prepend_first_page, delete_first_page
@@ -19,6 +19,7 @@ from automation.pipeline.compress import create_customer_zip
 logger = logging.getLogger(__name__)
 
 SPLIT_PAGES = 300  # 분할 단위 (OCR, 고급 공통)
+ABBYY_ATTEMPTS = 2  # 페이지 수 불일치 시 조각 재처리 포함 총 시도 횟수
 
 
 class PipelineRunner:
@@ -42,6 +43,46 @@ class PipelineRunner:
     def _notify(self):
         if self.on_update:
             self.on_update()
+
+    def _step(self, job: Job, text: str):
+        """진행 단계 표시 (PDF 여러 개면 '[2/3] ' 접두사가 붙는다)"""
+        job.current_step = f"{job.part_label}{text}"
+        self._notify()
+
+    def _abbyy_chunk(self, label: str, expected: int, produce) -> Path:
+        """produce(tag)로 조각을 처리하고 페이지 수를 검증. 불일치면 재시도.
+
+        ABBYY는 완료 판정이 '파일 크기가 안 변하면 끝'이라 페이지가 빠진 채로
+        저장돼도 통과한다. 조각마다 페이지 수를 세어 누락을 잡는다.
+
+        produce는 tag를 파일명에 섞어 매 시도마다 새 경로에 쓴다. 같은 경로에
+        다시 저장하면 ABBYY 덮어쓰기 대화상자에 걸리고, _wait_for_file_complete()가
+        이전 파일을 보고 즉시 '완료'로 판정해버린다.
+        """
+        actual = -1
+        for attempt in range(1, ABBYY_ATTEMPTS + 1):
+            out = produce("" if attempt == 1 else f"_r{attempt}")
+            actual = count_pages(out)
+            if actual == expected:
+                return out
+            logger.error(
+                f"{label}: 페이지 수 불일치 (입력 {expected}p → 출력 {actual}p) "
+                f"— 시도 {attempt}/{ABBYY_ATTEMPTS}"
+            )
+        raise RuntimeError(
+            f"{label}: ABBYY 처리 중 페이지 누락 — 입력 {expected}p, "
+            f"마지막 출력 {actual}p ({ABBYY_ATTEMPTS}회 시도 실패)"
+        )
+
+    def _verify_merged(self, job: Job, source: Path, merged: Path):
+        """조각을 다시 합친 결과가 원본과 같은 페이지 수인지 확인"""
+        expected = count_pages(source)
+        actual = count_pages(merged)
+        if actual != expected:
+            raise RuntimeError(
+                f"{job.book_name}: 조각 합치기 후 페이지 수 불일치 "
+                f"(원본 {expected}p → 결과 {actual}p)"
+            )
 
     def _run_loop(self):
         import time
@@ -125,10 +166,10 @@ class PipelineRunner:
 
         self._notify()
 
-    def _run_pipeline(self, job: Job, tmp: Path):
-        pdf_files = job.get_pdf_files()
+    def _process_pdf(self, job: Job, tmp: Path, src_pdf: Path) -> Path:
+        """PDF 한 개를 Flow + 이미지 재압축까지 처리하고 결과 경로 반환"""
         config = job.config
-        current_pdf = pdf_files[0]
+        current_pdf = src_pdf
 
         # --- 3가지 Flow 분기 ---
         if config.scan_type == "고급" and config.ocr:
@@ -140,13 +181,63 @@ class PipelineRunner:
 
         # --- 이미지 재압축: JPEG2000→JPEG 코덱 변환 (고급 모드만, 아이패드 렉 방지) ---
         if config.scan_type == "고급":
-            job.current_step = "이미지 재압축"
-            self._notify()
+            self._step(job, "이미지 재압축")
             compressed = tmp / f"{job.book_name}_recomp.pdf"
             if compress_pdf(current_pdf, compressed):
                 current_pdf = compressed
             else:
                 logger.warning(f"이미지 재압축 실패 — 원본 사용: {job.book_name}")
+
+        return current_pdf
+
+    def _run_pipeline(self, job: Job, tmp: Path):
+        pdf_files = job.get_pdf_files()
+        config = job.config
+
+        if len(pdf_files) == 1:
+            current_pdf = self._process_pdf(job, tmp, pdf_files[0])
+        else:
+            # PDF 여러 개: 각각 따로 처리(재압축까지) 후 파일명 순서대로 병합
+            expected_pages = sum(count_pages(p) for p in pdf_files)
+            logger.info(
+                f"PDF {len(pdf_files)}개 개별 처리 (병합 순서): "
+                f"{[p.name for p in pdf_files]} — 총 {expected_pages}p"
+            )
+
+            processed = []
+            try:
+                for i, src in enumerate(pdf_files, 1):
+                    job.part_label = f"[{i}/{len(pdf_files)}] "
+                    part_tmp = tmp / f"part{i:02d}"
+                    part_tmp.mkdir(parents=True, exist_ok=True)
+
+                    result = self._process_pdf(job, part_tmp, src)
+
+                    # 결과만 밖으로 빼고 조각 작업물은 즉시 정리 (임시 디스크 절약).
+                    # Flow도 재압축도 안 도는 설정(일반+OCR없음)이면 result가 입력폴더의
+                    # 원본이므로 옮기면 안 된다 — 그 경우만 복사한다.
+                    kept = tmp / f"processed_{i:02d}.pdf"
+                    if result == src:
+                        shutil.copy2(str(result), str(kept))
+                    else:
+                        shutil.move(str(result), str(kept))
+                    shutil.rmtree(part_tmp, ignore_errors=True)
+                    processed.append(kept)
+            finally:
+                job.part_label = ""
+
+            self._step(job, "PDF 합치기")
+            merged = tmp / f"{job.book_name}_merged.pdf"
+            merge_pdfs(processed, merged)
+
+            actual = count_pages(merged)
+            if actual != expected_pages:
+                raise RuntimeError(
+                    f"최종 페이지 수 불일치: 입력 합계 {expected_pages}p → 결과 {actual}p "
+                    f"— 페이지가 누락되어 출력하지 않습니다"
+                )
+            logger.info(f"병합 완료: PDF {len(pdf_files)}개 → {actual}p")
+            current_pdf = merged
 
         # --- 파일명 접미사 조합 ---
         final_stem = self._compute_final_stem(job)
@@ -207,8 +298,7 @@ class PipelineRunner:
         ocr_dir = tmp / "ocr_splits"
         ocr_dir.mkdir(parents=True, exist_ok=True)
 
-        job.current_step = "OCR 분할"
-        self._notify()
+        self._step(job, "OCR 분할")
         split_files = split_pdf_by_count(current_pdf, SPLIT_PAGES, ocr_dir)
 
         if len(split_files) == 1 and split_files[0] == current_pdf:
@@ -218,16 +308,21 @@ class PipelineRunner:
 
         ocr_files = []
         for i, split_file in enumerate(split_files, 1):
-            job.current_step = f"OCR 처리중 ({i}/{len(split_files)})"
-            self._notify()
-            ocr_out = ocr_dir / f"{split_file.stem}_OCR.pdf"
-            run_ocr_only(split_file, ocr_out, config.ocr_language)
-            ocr_files.append(ocr_out)
+            self._step(job, f"OCR 처리중 ({i}/{len(split_files)})")
 
-        job.current_step = "OCR 결과 합치기"
-        self._notify()
+            def produce(tag, split_file=split_file):
+                out = ocr_dir / f"{split_file.stem}{tag}_OCR.pdf"
+                run_ocr_only(split_file, out, config.ocr_language)
+                return out
+
+            ocr_files.append(self._abbyy_chunk(
+                f"{job.book_name} 조각 {i}/{len(split_files)}",
+                count_pages(split_file), produce))
+
+        self._step(job, "OCR 결과 합치기")
         merged = tmp / f"{job.book_name}.pdf"
         merge_pdfs(ocr_files, merged)
+        self._verify_merged(job, current_pdf, merged)
         return merged
 
     # ── Flow 2: 고급만 (no OCR) ──────────────────────────────
@@ -238,8 +333,7 @@ class PipelineRunner:
         split_dir = tmp / "adv_splits"
         split_dir.mkdir(parents=True, exist_ok=True)
 
-        job.current_step = "분할"
-        self._notify()
+        self._step(job, "분할")
         split_files = split_pdf_by_count(current_pdf, SPLIT_PAGES, split_dir)
 
         if len(split_files) == 1 and split_files[0] == current_pdf:
@@ -249,23 +343,27 @@ class PipelineRunner:
 
         result_files = []
         for i, split_file in enumerate(split_files, 1):
-            job.current_step = f"레벨 조정 ({i}/{len(split_files)})"
-            self._notify()
+            self._step(job, f"레벨 조정 ({i}/{len(split_files)})")
 
-            prepended = split_dir / f"{split_file.stem}_prep.pdf"
-            prepend_first_page(split_file, prepended)
+            def produce(tag, split_file=split_file):
+                prepended = split_dir / f"{split_file.stem}{tag}_prep.pdf"
+                prepend_first_page(split_file, prepended)
 
-            leveled = split_dir / f"{split_file.stem}_lev.pdf"
-            run_levels_only(prepended, leveled, config.black_point, config.white_point)
+                leveled = split_dir / f"{split_file.stem}{tag}_lev.pdf"
+                run_levels_only(prepended, leveled, config.black_point, config.white_point)
 
-            final = split_dir / f"{split_file.stem}_final.pdf"
-            delete_first_page(leveled, final)
-            result_files.append(final)
+                final = split_dir / f"{split_file.stem}{tag}_final.pdf"
+                delete_first_page(leveled, final)
+                return final
 
-        job.current_step = "합치기"
-        self._notify()
+            result_files.append(self._abbyy_chunk(
+                f"{job.book_name} 조각 {i}/{len(split_files)}",
+                count_pages(split_file), produce))
+
+        self._step(job, "합치기")
         merged = tmp / f"{job.book_name}.pdf"
         merge_pdfs(result_files, merged)
+        self._verify_merged(job, current_pdf, merged)
         return merged
 
     # ── Flow 3: 고급+OCR ─────────────────────────────────────
@@ -276,8 +374,7 @@ class PipelineRunner:
         split_dir = tmp / "adv_ocr_splits"
         split_dir.mkdir(parents=True, exist_ok=True)
 
-        job.current_step = "분할"
-        self._notify()
+        self._step(job, "분할")
         split_files = split_pdf_by_count(current_pdf, SPLIT_PAGES, split_dir)
 
         if len(split_files) == 1 and split_files[0] == current_pdf:
@@ -287,16 +384,22 @@ class PipelineRunner:
 
         result_files = []
         for i, split_file in enumerate(split_files, 1):
-            job.current_step = f"레벨+OCR ({i}/{len(split_files)})"
-            self._notify()
-            out = split_dir / f"{split_file.stem}_done.pdf"
-            run_levels_with_ocr(split_file, out, config.black_point, config.white_point, config.ocr_language)
-            result_files.append(out)
+            self._step(job, f"레벨+OCR ({i}/{len(split_files)})")
 
-        job.current_step = "합치기"
-        self._notify()
+            def produce(tag, split_file=split_file):
+                out = split_dir / f"{split_file.stem}{tag}_done.pdf"
+                run_levels_with_ocr(split_file, out, config.black_point,
+                                    config.white_point, config.ocr_language)
+                return out
+
+            result_files.append(self._abbyy_chunk(
+                f"{job.book_name} 조각 {i}/{len(split_files)}",
+                count_pages(split_file), produce))
+
+        self._step(job, "합치기")
         merged = tmp / f"{job.book_name}.pdf"
         merge_pdfs(result_files, merged)
+        self._verify_merged(job, current_pdf, merged)
         return merged
 
     def _copy_with_retry(self, src: Path, dst: Path, max_retries: int = 3, delay: int = 5):

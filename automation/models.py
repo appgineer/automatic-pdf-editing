@@ -8,6 +8,16 @@ from pathlib import Path
 
 
 _CUSTOMER_SUFFIX_RE = re.compile(r"^(?P<name>.+)-(?P<count>\d+)$")
+_NUM_RE = re.compile(r"(\d+)")
+
+
+def natural_key(name: str) -> list:
+    """파일명 속 숫자를 수치로 비교하는 정렬 키.
+
+    "Image_2.pdf" < "Image_10.pdf" (문자열 정렬이면 반대)
+    번호는 순서만 정하며 연속일 필요는 없다 (Image_005 다음이 Image_008이어도 정상).
+    """
+    return [int(t) if t.isdigit() else t.lower() for t in _NUM_RE.split(name)]
 
 
 def parse_customer_folder(folder_name: str) -> tuple[str, int | None]:
@@ -84,6 +94,7 @@ class Job:
     current_step: str = ""
     error_message: str = ""
     pdf_files: list = field(default_factory=list)
+    part_label: str = ""  # PDF 여러 개일 때 진행 표시 접두사 ("[2/3] ")
 
     def __post_init__(self):
         if not self.customer_folder_name:
@@ -95,5 +106,6 @@ class Job:
 
     def get_pdf_files(self) -> list:
         if not self.pdf_files:
-            self.pdf_files = sorted(self.book_dir.glob("*.pdf"))
+            self.pdf_files = sorted(self.book_dir.glob("*.pdf"),
+                                    key=lambda p: natural_key(p.name))
         return self.pdf_files

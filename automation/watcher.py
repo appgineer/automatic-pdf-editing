@@ -4,7 +4,7 @@ import time
 import threading
 import logging
 from pathlib import Path
-from automation.models import Job, BookConfig, parse_customer_folder
+from automation.models import Job, BookConfig, parse_customer_folder, natural_key
 from automation.queue_manager import QueueManager
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,8 @@ class FolderWatcher:
 
             for book_dir in book_dirs:
                 config_path = book_dir / "config.json"
-                pdf_files = sorted(book_dir.glob("*.pdf"))
+                pdf_files = sorted(book_dir.glob("*.pdf"),
+                                   key=lambda p: natural_key(p.name))
 
                 if not config_path.exists() or not pdf_files:
                     continue
