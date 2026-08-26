@@ -183,7 +183,7 @@ class PipelineRunner:
         if config.scan_type == "고급":
             self._step(job, "이미지 재압축")
             compressed = tmp / f"{job.book_name}_recomp.pdf"
-            if compress_pdf(current_pdf, compressed):
+            if compress_pdf(current_pdf, compressed, on_step=lambda t: self._step(job, t)):
                 current_pdf = compressed
             else:
                 logger.warning(f"이미지 재압축 실패 — 원본 사용: {job.book_name}")

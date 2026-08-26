@@ -16,6 +16,7 @@ PyMuPDF(MuPDF)로 JPEG2000 이미지만 골라 JPEG(DCTDecode)로 재인코딩�
 
 import io
 import logging
+import time
 from pathlib import Path
 
 import fitz  # PyMuPDF
@@ -32,6 +33,10 @@ JPEG_QUALITY = 50
 # 용량이 과도하면 True로 켜서 해상도를 낮춘다 (열람용 화질 유지, 용량 감소).
 DOWNSAMPLE = False
 DPI_TARGET = 150  # 다운샘플 목표 DPI (2의 배수로만 축소되므로 근사치)
+
+# 진행 보고 최소 간격(초). 호출부가 보고마다 작업 목록 트리를 통째로 다시 그리므로
+# 페이지마다 그대로 흘리면 낭비다.
+STEP_REPORT_INTERVAL = 1.0
 
 
 def _to_jpeg_pixmap(doc: fitz.Document, xref: int):
@@ -62,12 +67,28 @@ def _maybe_downsample(pix, page, xref):
     return pix
 
 
-def compress_pdf(input_path: Path, output_path: Path) -> bool:
+def compress_pdf(input_path: Path, output_path: Path, on_step=None) -> bool:
     """JPEG2000 이미지를 JPEG로 재인코딩. 성공 시 output_path 생성하고 True 반환.
 
     변환 후 이미지가 사라져 빈 페이지가 생기면 False를 반환하여
     호출부가 원본을 그대로 사용(폴백)하도록 한다.
+
+    on_step(text)을 주면 진행 상황을 보고한다. 이 단계는 오래 걸리는데 중간 신호가
+    없어 멈춘 건지 처리 중인지 구분할 수 없었다. 마지막 저장은 페이지 단위 신호가
+    없으므로 별도 문구로 알린다 — 안 그러면 카운터가 끝까지 찬 채로 멈춰 있어
+    마지막 페이지에서 멈춘 것과 구분되지 않는다.
     """
+    last_report = 0.0
+
+    def report(text: str, force: bool = False):
+        nonlocal last_report
+        if on_step is None:
+            return
+        now = time.time()
+        if force or now - last_report >= STEP_REPORT_INTERVAL:
+            last_report = now
+            on_step(text)
+
     try:
         doc = fitz.open(input_path)
     except Exception as e:
@@ -80,6 +101,7 @@ def compress_pdf(input_path: Path, output_path: Path) -> bool:
     seen: set[int] = set()
     try:
         for pno in range(doc.page_count):
+            report(f"이미지 재압축 ({pno + 1}/{doc.page_count}p)", force=(pno == 0))
             page = doc[pno]
             for img in page.get_images(full=True):
                 xref = img[0]
@@ -128,6 +150,7 @@ def compress_pdf(input_path: Path, output_path: Path) -> bool:
             doc.close()
             return False
 
+    report("이미지 재압축 저장중", force=True)
     try:
         doc.save(output_path, garbage=4, deflate=True)
     finally:
