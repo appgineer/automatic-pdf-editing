@@ -14,6 +14,7 @@ from automation.pipeline.split import split_pdf_by_count, split_pdf_by_page_rang
 from automation.pipeline.abbyy_editor import run_levels_only, run_levels_with_ocr, run_ocr_only
 from automation.pipeline.page_utils import prepend_first_page, delete_first_page
 from automation.pipeline.recompress import compress_pdf
+from automation.pipeline.crop import crop_pdf
 from automation.pipeline.compress import create_customer_zip
 
 logger = logging.getLogger(__name__)
@@ -238,6 +239,17 @@ class PipelineRunner:
                 )
             logger.info(f"병합 완료: PDF {len(pdf_files)}개 → {actual}p")
             current_pdf = merged
+
+        # --- 여백 자르기: CropBox만 줄여 여백을 가린다 (crop_mm 값이 있을 때만) ---
+        # 분할 앞에 두면 조각마다 따로 자를 필요가 없고, ABBYY 뒤라서 ABBYY가
+        # CropBox를 어떻게 다루는지에 좌우되지 않는다.
+        if any(v > 0 for v in config.crop_mm.values()):
+            self._step(job, "여백 자르기")
+            cropped = tmp / f"{job.book_name}_crop.pdf"
+            if crop_pdf(current_pdf, cropped, config.crop_mm):
+                current_pdf = cropped
+            else:
+                logger.warning(f"여백 자르기 건너뜀 — 원본 사용: {job.book_name}")
 
         # --- 파일명 접미사 조합 ---
         final_stem = self._compute_final_stem(job)
