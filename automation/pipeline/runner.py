@@ -180,14 +180,13 @@ class PipelineRunner:
         elif config.ocr:
             current_pdf = self._flow_standard_ocr(job, tmp, current_pdf)
 
-        # --- 이미지 재압축: JPEG2000→JPEG 코덱 변환 (고급 모드만, 아이패드 렉 방지) ---
-        if config.scan_type == "고급":
-            self._step(job, "이미지 재압축")
-            compressed = tmp / f"{job.book_name}_recomp.pdf"
-            if compress_pdf(current_pdf, compressed, on_step=lambda t: self._step(job, t)):
-                current_pdf = compressed
-            else:
-                logger.warning(f"이미지 재압축 실패 — 원본 사용: {job.book_name}")
+        # --- 이미지 재압축: JPEG2000→JPEG 코덱 변환 (모든 모드, 아이패드 렉 + NotebookLM 등 JPEG2000 미지원 대응) ---
+        self._step(job, "이미지 재압축")
+        compressed = tmp / f"{job.book_name}_recomp.pdf"
+        if compress_pdf(current_pdf, compressed, on_step=lambda t: self._step(job, t)):
+            current_pdf = compressed
+        else:
+            logger.warning(f"이미지 재압축 실패 — 원본 사용: {job.book_name}")
 
         return current_pdf
 
@@ -215,8 +214,8 @@ class PipelineRunner:
                     result = self._process_pdf(job, part_tmp, src)
 
                     # 결과만 밖으로 빼고 조각 작업물은 즉시 정리 (임시 디스크 절약).
-                    # Flow도 재압축도 안 도는 설정(일반+OCR없음)이면 result가 입력폴더의
-                    # 원본이므로 옮기면 안 된다 — 그 경우만 복사한다.
+                    # Flow가 없는 설정(일반+OCR없음)에서 재압축까지 실패해 원본으로 폴백하면
+                    # result가 입력폴더의 원본이므로 옮기면 안 된다 — 그 경우만 복사한다.
                     kept = tmp / f"processed_{i:02d}.pdf"
                     if result == src:
                         shutil.copy2(str(result), str(kept))
