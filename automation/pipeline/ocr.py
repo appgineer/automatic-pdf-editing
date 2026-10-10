@@ -160,28 +160,42 @@ def _open_file(pdf_path: Path):
 
 
 def _set_language(languages: list[str]):
-    """Ctrl+. → OCR 언어 설정"""
+    """Ctrl+. → 언어 메뉴 맞추기 → OCR 언어 설정
+
+    옵션 창은 마지막으로 보던 메뉴로 열리므로 매번 ←×6(맨 왼쪽) → →×2(언어)로 맞춘다.
+    """
     logger.info(f"[언어] 시작: {languages}")
 
-    logger.info("[언어 1/4] Ctrl+. (언어 설정 창 열기)")
+    logger.info("[언어 1/5] Ctrl+. (언어 설정 창 열기)")
     pyautogui.hotkey("ctrl", ".")
     time.sleep(1)
 
-    logger.info("[언어 2/4] Tab×3 (언어 입력칸 이동)")
+    logger.info("[언어 2/5] ←×6 → →×2 (언어 메뉴로 맞추기)")
+    for i in range(6):
+        pyautogui.press("left")
+        logger.info(f"[언어 2/5]  - ← {i+1}/6")
+        time.sleep(0.3)
+    for i in range(2):
+        pyautogui.press("right")
+        logger.info(f"[언어 2/5]  - → {i+1}/2")
+        time.sleep(0.3)
+    time.sleep(0.5)
+
+    logger.info("[언어 3/5] Tab×3 (언어 입력칸 이동)")
     for i in range(3):
         pyautogui.press("tab")
-        logger.info(f"[언어 2/4]  - Tab {i+1}/3")
+        logger.info(f"[언어 3/5]  - Tab {i+1}/3")
         time.sleep(0.1)
 
     for li, lang in enumerate(languages, 1):
-        logger.info(f"[언어 3/4]  - 언어 입력 {li}/{len(languages)}: '{lang}'")
+        logger.info(f"[언어 4/5]  - 언어 입력 {li}/{len(languages)}: '{lang}'")
         pyperclip.copy(lang)
         pyautogui.hotkey("ctrl", "v")
         time.sleep(0.3)
         pyautogui.press("enter")
         time.sleep(0.3)
 
-    logger.info("[언어 4/4] Enter (확인)")
+    logger.info("[언어 5/5] Enter (확인)")
     pyautogui.press("enter")
     time.sleep(0.5)
     logger.info("[언어] 완료")
