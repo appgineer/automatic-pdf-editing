@@ -172,6 +172,16 @@ class PipelineRunner:
         config = job.config
         current_pdf = src_pdf
 
+        # --- 여백 자르기: CropBox만 줄여 여백을 가린다 (crop_mm 값이 있을 때만) ---
+        # ABBYY 앞에 두어 ABBYY가 잘린 영역만 다시 저장하게 한다 (용량 절감 목적).
+        if any(v > 0 for v in config.crop_mm.values()):
+            self._step(job, "여백 자르기")
+            cropped = tmp / f"{job.book_name}_crop.pdf"
+            if crop_pdf(current_pdf, cropped, config.crop_mm):
+                current_pdf = cropped
+            else:
+                logger.warning(f"여백 자르기 건너뜀 — 원본 사용: {job.book_name}")
+
         # --- 3가지 Flow 분기 ---
         if config.scan_type == "고급" and config.ocr:
             current_pdf = self._flow_advanced_ocr(job, tmp, current_pdf)
@@ -238,17 +248,6 @@ class PipelineRunner:
                 )
             logger.info(f"병합 완료: PDF {len(pdf_files)}개 → {actual}p")
             current_pdf = merged
-
-        # --- 여백 자르기: CropBox만 줄여 여백을 가린다 (crop_mm 값이 있을 때만) ---
-        # 분할 앞에 두면 조각마다 따로 자를 필요가 없고, ABBYY 뒤라서 ABBYY가
-        # CropBox를 어떻게 다루는지에 좌우되지 않는다.
-        if any(v > 0 for v in config.crop_mm.values()):
-            self._step(job, "여백 자르기")
-            cropped = tmp / f"{job.book_name}_crop.pdf"
-            if crop_pdf(current_pdf, cropped, config.crop_mm):
-                current_pdf = cropped
-            else:
-                logger.warning(f"여백 자르기 건너뜀 — 원본 사용: {job.book_name}")
 
         # --- 파일명 접미사 조합 ---
         final_stem = self._compute_final_stem(job)
