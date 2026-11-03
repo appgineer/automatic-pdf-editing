@@ -104,6 +104,3 @@ class JobTree(ttk.Frame):
             if cid == node_id:
                 self._selected_customer = name
                 break
-
-    def get_selected_customer(self) -> str | None:
-        return self._selected_customer

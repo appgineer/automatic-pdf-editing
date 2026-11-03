@@ -13,7 +13,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from automation.config import load_settings, save_settings
-from automation.error_log import setup_error_log
+# from automation.error_log import setup_error_log  # 오류로그.txt 사용 안 함
 from automation.queue_manager import QueueManager
 from automation.watcher import FolderWatcher
 from automation.pipeline.runner import PipelineRunner
@@ -56,10 +56,7 @@ class MainWindow:
             folder_frame,
             on_start=self._on_start,
             on_stop=self._on_stop,
-            on_update=self._on_update,
             on_cache_delete=self._on_cache_delete,
-            on_up=self._on_move_up,
-            on_down=self._on_move_down,
         )
         self.actions.pack(fill=tk.X, pady=4)
 
@@ -138,7 +135,7 @@ class MainWindow:
             return
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        setup_error_log(output_dir)
+        # setup_error_log(output_dir)  # 오류로그.txt 사용 안 함
 
         # 감시 시작 (새 폴더 추가 감지용)
         self.watcher.start(input_dir)
@@ -299,23 +296,6 @@ class MainWindow:
         self._shutdown_cancelled = True
         self.status_var.set("컴퓨터 종료가 취소되었습니다.")
         self._shutdown_popup.destroy()
-
-    def _on_move_up(self):
-        customer = self.job_tree.get_selected_customer()
-        if customer:
-            self.queue.move_customer_up(customer)
-            self._refresh_tree()
-
-    def _on_move_down(self):
-        customer = self.job_tree.get_selected_customer()
-        if customer:
-            self.queue.move_customer_down(customer)
-            self._refresh_tree()
-
-    def _on_update(self):
-        """업데이트 버튼 (기능 미구현 — 추후 정의)"""
-        self.status_var.set("업데이트 기능은 준비 중입니다")
-        logger.info("업데이트 버튼 클릭 (미구현)")
 
     def _on_cache_delete(self):
         """ABBYY FineReaderShell 캐시 폴더 내용물 삭제"""

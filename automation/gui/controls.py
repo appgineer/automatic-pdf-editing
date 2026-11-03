@@ -49,8 +49,7 @@ class FolderSelector(tk.Frame):
 
 class ActionButtons(tk.Frame):
     def __init__(self, parent, on_start=None, on_stop=None,
-                 on_update=None, on_cache_delete=None,
-                 on_up=None, on_down=None):
+                 on_cache_delete=None):
         super().__init__(parent)
 
         btn_frame = tk.Frame(self)
@@ -64,22 +63,10 @@ class ActionButtons(tk.Frame):
         self.stop_btn = tk.Button(btn_frame, text="중지", command=on_stop, width=8, font=btn_font, height=1, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=4)
 
-        # 업데이트 / 캐시 삭제 — 시작·중지 옆에 같이 왼쪽 정렬
-        self.update_btn = tk.Button(btn_frame, text="업데이트", command=on_update,
-                                    width=8, font=btn_font, height=1)
-        self.update_btn.pack(side=tk.LEFT, padx=4)
-
+        # 캐시 삭제 — 시작·중지 옆에 같이 왼쪽 정렬
         self.cache_btn = tk.Button(btn_frame, text="캐시 삭제", command=on_cache_delete,
                                    width=8, font=btn_font, height=1)
         self.cache_btn.pack(side=tk.LEFT, padx=4)
-
-        tk.Frame(btn_frame, width=20).pack(side=tk.LEFT)
-
-        self.up_btn = tk.Button(btn_frame, text="▲ 위로", command=on_up, width=8, font=btn_font, height=1)
-        self.up_btn.pack(side=tk.RIGHT, padx=4)
-
-        self.down_btn = tk.Button(btn_frame, text="▼ 아래로", command=on_down, width=8, font=btn_font, height=1)
-        self.down_btn.pack(side=tk.RIGHT, padx=4)
 
     def set_running(self, running: bool):
         self.start_btn.config(state=tk.DISABLED if running else tk.NORMAL)
