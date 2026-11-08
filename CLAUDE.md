@@ -44,7 +44,8 @@ PDF가 여러 개면 각 PDF가 1~3을 따로 거친 뒤 4에서 합쳐진다.
 
 - **여백 자르기 자체는 Acrobat과 같은 "가리기"다.** CropBox만 줄이므로 이 단계에서는 이미지 데이터가 파일에 남고 용량도 줄지 않는다.
 - 자르기를 **ABBYY 앞에** 두는 이유: ABBYY가 잘린 영역만 다시 저장해 용량이 줄기를 기대해서다. ABBYY가 CropBox를 무시하면 여백이 되살아날 수 있으니 결과로 확인한다. 일반+OCR 없음은 ABBYY를 안 거치므로 가리기만 되고 용량은 그대로다.
-- 자르기 여백은 화면에서 본 위/아래/좌/우다. `/Rotate`가 걸린 페이지도 맞도록 `derotation_matrix`로 변환한 뒤 CropBox에 넣는다(`pdf-level-preview`의 `_apply_page_edit`와 같은 계산).
+- 자르기 여백은 화면에서 본 위/아래/좌/우다. `/Rotate`가 걸린 페이지도 맞도록 회전 전 좌표로 변환한 뒤 CropBox에 넣는다(`pdf-level-preview`의 `_apply_page_edit`와 같은 계산).
+- CropBox가 MediaBox 밖으로 나간 PDF(여러 프로그램을 거친 스캔)가 있다. 화면에는 겹치는 부분만 보이므로 보이는 영역(`_visible_box` = CropBox ∩ MediaBox) 기준으로 계산하고, 회전 변환도 그 크기로 직접 만들고(`_derotation`), CropBox는 MediaBox 안에 맞춰 직접 쓴다(`_set_cropbox`). PyMuPDF `set_cropbox`·`derotation_matrix`를 그대로 쓰던 때는 이런 파일에서 "CropBox not in MediaBox"로 **자르기가 통째로 건너뛰어지고**("여백 자르기 실패 — 원본 사용" 로그만) 90°·270°는 나간 만큼 어긋났다(시험 32가지 중 9가지). V(pdf-level-preview)와 같은 수정.
 - ABBYY 완료 판정이 "저장 파일 크기가 안 변하면 끝"이라 페이지가 빠질 수 있다. 조각마다 페이지 수를 검증하고 불일치면 재처리, 끝까지 안 맞으면 출력하지 않고 오류로 마감한다 — 이 안전장치를 없애지 말 것.
 - 이미지 재압축은 새 이미지를 추가(`replace_image`)하지 않고 같은 xref를 제자리 교체한다. 추가하면 페이지에 이미지가 중복돼 용량 2배 + 렉이 심해진다.
 
