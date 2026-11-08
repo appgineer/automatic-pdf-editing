@@ -13,11 +13,19 @@ PyMuPDF(MuPDF)로 JPEG2000 이미지만 골라 JPEG(DCTDecode)로 재인코딩�
   반드시 같은 xref를 '제자리 교체'한다.
 - 이전에는 Ghostscript로 처리했으나, GS의 JPEG2000/JBIG2 디코더가 일부 이미지를
   조용히 드롭해 중간중간 빈 페이지가 생기는 문제가 있어 교체함.
+- 이미지 풀기·JPEG 만들기는 작업 프로세스 여러 개가 나눠서 한다. PyMuPDF는 스레드를
+  지원하지 않아 스레드가 아니라 프로세스를 쓴다. 작업 프로세스는 결과(JPEG 바이트)만
+  만들고, PDF에 넣는 일은 이 프로세스가 원래 xref 자리에 한다 → 끝나는 순서와 상관없이
+  페이지·이미지 위치가 바뀌지 않는다.
 """
 
 import io
 import logging
+import multiprocessing
+import os
+import threading
 import time
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import fitz  # PyMuPDF
@@ -38,6 +46,13 @@ DPI_TARGET = 150  # 다운샘플 목표 DPI (2의 배수로만 축소되므로 �
 # 진행 보고 최소 간격(초). 호출부가 보고마다 작업 목록 트리를 통째로 다시 그리므로
 # 페이지마다 그대로 흘리면 낭비다.
 STEP_REPORT_INTERVAL = 1.0
+
+# 이미지 변환을 나눠 맡을 작업 프로세스 수. i7-14700K(코어 20개, 논리 프로세서 28개) + 메모리 32GB 기준.
+# 600 DPI 컬러 1장을 풀 때 프로세스마다 메모리를 최대 약 0.9GB 쓴다(16개면 약 14GB).
+# 28개까지 올리면 메모리가 모자라 디스크를 대신 쓰게 돼 오히려 느려질 수 있다.
+WORKERS = 16
+
+_worker_doc = None  # 작업 프로세스마다 따로 연 PDF (읽기만 한다)
 
 
 def _to_jpeg_pixmap(doc: fitz.Document, xref: int):
@@ -66,6 +81,44 @@ def _maybe_downsample(pix, page, xref):
     if factor:
         pix.shrink(factor)
     return pix
+
+
+def _init_worker(input_path: str):
+    """작업 프로세스 시작 시 한 번: PDF를 열고, 본 프로그램이 꺼지면 같이 끝나도록 감시."""
+    global _worker_doc
+    _worker_doc = fitz.open(input_path)
+
+    # 본 프로그램이 비정상 종료돼도 작업 프로세스는 다음 일을 기다리며 영원히 남는다.
+    # 본 프로그램 프로세스가 사라지면 즉시 같이 끝낸다.
+    parent = multiprocessing.parent_process()
+    if parent is not None:
+        def _exit_with_parent():
+            parent.join()
+            os._exit(1)
+        threading.Thread(target=_exit_with_parent, daemon=True).start()
+
+
+def _encode_jpeg(task):
+    """작업 프로세스에서 실행: JPEG2000 이미지 하나를 풀어 JPEG 바이트로 만든다.
+
+    결과에 xref를 같이 돌려줘서, 받는 쪽이 원래 자리에 넣는다.
+    """
+    pno, xref = task
+    pix = _to_jpeg_pixmap(_worker_doc, xref)
+    if DOWNSAMPLE:
+        pix = _maybe_downsample(pix, _worker_doc[pno], xref)
+
+    gray = pix.colorspace.n == 1
+    w, h = pix.width, pix.height
+    # baseline + 4:2:0 JPEG으로 인코딩 (아이패드 디코딩이 빠름, GS와 동일 방식).
+    # MuPDF의 tobytes("jpeg")는 progressive + 4:4:4라 태블릿에서 렉이 더 걸려
+    # Pillow로 인코딩한다. 4:2:0는 밝기(글자 선명도)는 풀해상도 유지, 색차만 절반.
+    img = Image.frombytes("L" if gray else "RGB", (w, h), pix.samples)
+    pix = None
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=JPEG_QUALITY,
+             subsampling=2, progressive=False, optimize=True)
+    return xref, buf.getvalue(), gray, w, h
 
 
 def compress_pdf(input_path: Path, output_path: Path, on_step=None) -> bool:
@@ -101,10 +154,10 @@ def compress_pdf(input_path: Path, output_path: Path, on_step=None) -> bool:
 
     seen: set[int] = set()
     try:
+        # 변환할 JPEG2000 이미지 목록 (여러 페이지가 같이 쓰는 이미지는 한 번만)
+        tasks = []
         for pno in range(doc.page_count):
-            report(f"이미지 재압축 ({pno + 1}/{doc.page_count}p)", force=(pno == 0))
-            page = doc[pno]
-            for img in page.get_images(full=True):
+            for img in doc[pno].get_images(full=True):
                 xref = img[0]
                 if xref in seen:
                     continue
@@ -113,32 +166,28 @@ def compress_pdf(input_path: Path, output_path: Path, on_step=None) -> bool:
                 filt = doc.xref_get_key(xref, "Filter")
                 if not (filt and "JPX" in str(filt[1])):
                     continue  # JPEG2000만 변환, 나머지(JBIG2/기존 JPEG 등)는 유지
+                tasks.append((pno, xref))
 
-                pix = _to_jpeg_pixmap(doc, xref)
-                if DOWNSAMPLE:
-                    pix = _maybe_downsample(pix, page, xref)
-
-                cs = "/DeviceGray" if pix.colorspace.n == 1 else "/DeviceRGB"
-                w, h = pix.width, pix.height
-                # baseline + 4:2:0 JPEG으로 인코딩 (아이패드 디코딩이 빠름, GS와 동일 방식).
-                # MuPDF의 tobytes("jpeg")는 progressive + 4:4:4라 태블릿에서 렉이 더 걸려
-                # Pillow로 인코딩한다. 4:2:0는 밝기(글자 선명도)는 풀해상도 유지, 색차만 절반.
-                mode = "L" if pix.colorspace.n == 1 else "RGB"
-                img = Image.frombytes(mode, (w, h), pix.samples)
-                pix = None
-                buf = io.BytesIO()
-                img.save(buf, "JPEG", quality=JPEG_QUALITY,
-                         subsampling=2, progressive=False, optimize=True)
-                jpg = buf.getvalue()
-
-                # 같은 xref 스트림을 raw JPEG으로 제자리 교체 (compress=False = 재압축 안 함)
-                doc.update_stream(xref, jpg, compress=False)
-                doc.xref_set_key(xref, "Filter", "/DCTDecode")
-                doc.xref_set_key(xref, "ColorSpace", cs)
-                doc.xref_set_key(xref, "BitsPerComponent", "8")
-                doc.xref_set_key(xref, "Width", str(w))
-                doc.xref_set_key(xref, "Height", str(h))
-                doc.xref_set_key(xref, "DecodeParms", "null")  # JPX용 파라미터 제거
+        if tasks:
+            report(f"이미지 재압축 (0/{len(tasks)}장)", force=True)
+            pool = ProcessPoolExecutor(max_workers=min(WORKERS, len(tasks)),
+                                       initializer=_init_worker,
+                                       initargs=(str(input_path),))
+            try:
+                # map은 넣은 순서대로 결과를 돌려준다 (끝나는 순서와 무관)
+                for done, (xref, jpg, gray, w, h) in enumerate(pool.map(_encode_jpeg, tasks), 1):
+                    # 같은 xref 스트림을 raw JPEG으로 제자리 교체 (compress=False = 재압축 안 함)
+                    doc.update_stream(xref, jpg, compress=False)
+                    doc.xref_set_key(xref, "Filter", "/DCTDecode")
+                    doc.xref_set_key(xref, "ColorSpace", "/DeviceGray" if gray else "/DeviceRGB")
+                    doc.xref_set_key(xref, "BitsPerComponent", "8")
+                    doc.xref_set_key(xref, "Width", str(w))
+                    doc.xref_set_key(xref, "Height", str(h))
+                    doc.xref_set_key(xref, "DecodeParms", "null")  # JPX용 파라미터 제거
+                    report(f"이미지 재압축 ({done}/{len(tasks)}장)")
+            finally:
+                # 오류로 중간에 나오면 남은 이미지는 취소 (끝까지 변환하느라 기다리지 않게)
+                pool.shutdown(wait=True, cancel_futures=True)
     except Exception as e:
         logger.error(f"이미지 재압축 실패: {input_path.name} ({e})")
         doc.close()

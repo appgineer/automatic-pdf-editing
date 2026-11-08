@@ -185,6 +185,10 @@ class MainWindow:
 
         logger.info("앱 종료 - 정리 완료")
         self.root.destroy()
+        # 이미지 재압축 중이면 파이썬 기본 종료는 남은 이미지를 끝까지 변환한 뒤에야 끝나서
+        # 창만 닫히고 프로그램은 계속 돈다(그 사이 작업도 이어서 진행). 바로 끝낸다.
+        # 작업 프로세스들은 본 프로그램이 사라지면 스스로 끝난다(recompress._init_worker).
+        os._exit(0)
 
     def _on_new_job(self, job):
         """새 작업 감지 시 (감시 스레드에서 호출)"""
