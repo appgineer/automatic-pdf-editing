@@ -10,28 +10,6 @@ from pathlib import Path
 _CUSTOMER_SUFFIX_RE = re.compile(r"^(?P<name>.+)-(?P<count>\d+)$")
 _NUM_RE = re.compile(r"(\d+)")
 
-CROP_SIDES = ("top", "bottom", "left", "right")
-
-
-def parse_crop_mm(value) -> dict:
-    """config.json의 crop_mm을 {top, bottom, left, right} (mm, float)으로 정규화.
-
-    pdf-level-preview가 네 방향 값을 객체로 쓴다. 구버전은 숫자 하나로 적었으므로
-    그 경우 네 방향 모두 같은 값으로 읽는다. 없거나 이상한 값이면 전부 0.
-    """
-    def num(v):
-        try:
-            return max(0.0, float(v))
-        except (TypeError, ValueError):
-            return 0.0
-
-    if isinstance(value, dict):
-        return {s: num(value.get(s)) for s in CROP_SIDES}
-    if isinstance(value, (int, float)):
-        return {s: num(value) for s in CROP_SIDES}
-    return {s: 0.0 for s in CROP_SIDES}
-
-
 def natural_key(name: str) -> list:
     """파일명 속 숫자를 수치로 비교하는 정렬 키.
 
@@ -75,12 +53,11 @@ class BookConfig:
     split_method: str = ""  # "page" 또는 "size"
     split_page_ranges: str = ""
     split_size_mb: int = 0
-    crop_mm: dict = None  # 여백 자르기 {top, bottom, left, right} (mm)
+    # 여백 자르기(crop_mm)는 없앴다: 자르기는 pdf-level-preview에서 하고, 옛 config.json의 crop_mm은 무시한다
 
     def __post_init__(self):
         if self.ocr_language is None:
             self.ocr_language = ["한국어"]
-        self.crop_mm = parse_crop_mm(self.crop_mm)
 
     @classmethod
     def from_file(cls, path: Path) -> "BookConfig":
@@ -102,7 +79,6 @@ class BookConfig:
             split_method=data.get("split_method", ""),
             split_page_ranges=data.get("split_page_ranges", data.get("split_by_pages", "")),
             split_size_mb=data.get("split_size_mb", data.get("split_by_size", 0)),
-            crop_mm=data.get("crop_mm"),
         )
 
 

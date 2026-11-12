@@ -24,32 +24,22 @@ A컴퓨터에서 공유폴더로 PDF + config.json을 보내면, B컴퓨터에�
   "ocr_language": "Korean",
   "split_after_ocr": false,
   "split_by_pages": "1-20,21-50",
-  "split_by_size": 200,
-  "crop_mm": {"top": 2, "bottom": 2, "left": 2, "right": 2}
+  "split_by_size": 200
 }
 ```
 
 ## 처리 파이프라인 (책 1권 단위)
 
-책 폴더 안의 PDF는 **각각 따로** 아래 1~6을 거친 뒤, 마지막에 하나로 병합된다.
+책 폴더 안의 PDF는 **각각 따로** 아래 1~5를 거친 뒤, 마지막에 하나로 병합된다.
 
-1. **여백 자르기** - `crop_mm` 값이 있을 때만. 모든 페이지의 CropBox를 줄여 여백을 가린다
-2. **레벨 조정** - config type="고급"일 때만 적용
-3. **300페이지 분할** → `_s` 접미사
-4. **ABBYY OCR** (pyautogui GUI 자동화) → `_OCR` 접미사
-5. **조각 합치기**
-6. **이미지 재압축** - 모든 모드 (JPEG2000→JPEG, 아이패드 렉 방지 + NotebookLM 업로드)
-7. **PDF 합치기** - PDF가 여러 개면 파일명 숫자 오름차순으로 병합
-8. **최종 분할** (선택, config에 따라)
-9. **ZIP 압축** - 고객의 모든 책 완료 → `고객이름 님.zip` 생성
-
-### 여백 자르기
-
-Acrobat의 페이지 자르기와 같은 **가리기** 방식이다. 보이는 영역(CropBox)만 줄이므로
-이미지 데이터는 파일에 남고 용량도 줄지 않지만, 이미지를 다시 만들지 않아 빠르고
-화질이 그대로다. 여백 값은 `pdf-level-preview`에서 눈으로 보고 정한 위/아래/좌/우(mm)다.
-ABBYY 앞에 두어, ABBYY가 잘린 영역만 다시 저장해 용량이 줄기를 기대한다
-(ABBYY를 안 거치는 일반+OCR 없음은 가리기만 되고 용량은 그대로다).
+1. **레벨 조정** - config type="고급"일 때만 적용
+2. **300페이지 분할** → `_s` 접미사
+3. **ABBYY OCR** (pyautogui GUI 자동화) → `_OCR` 접미사
+4. **조각 합치기**
+5. **이미지 재압축** - 모든 모드 (JPEG2000→JPEG, 아이패드 렉 방지 + NotebookLM 업로드)
+6. **PDF 합치기** - PDF가 여러 개면 파일명 숫자 오름차순으로 병합
+7. **최종 분할** (선택, config에 따라)
+8. **ZIP 압축** - 고객의 모든 책 완료 → `고객이름 님.zip` 생성
 
 ### PDF 여러 개 넣기
 
@@ -84,7 +74,6 @@ automatic-pdf-editing/
 │   │   ├── page_utils.py       # 첫 페이지 복사/삭제
 │   │   ├── ocr.py              # ABBYY OCR 자동화
 │   │   ├── abbyy_editor.py     # ABBYY 레벨 조정 자동화
-│   │   ├── crop.py             # 여백 자르기 (CropBox 줄이기)
 │   │   └── compress.py         # ZIP 압축
 │   └── gui/
 │       ├── main_window.py      # 메인 윈도우

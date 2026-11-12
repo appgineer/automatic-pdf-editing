@@ -14,7 +14,6 @@ from automation.pipeline.split import split_pdf_by_count, split_pdf_by_page_rang
 from automation.pipeline.abbyy_editor import run_levels_only, run_levels_with_ocr, run_ocr_only
 from automation.pipeline.page_utils import prepend_first_page, delete_first_page
 from automation.pipeline.recompress import compress_pdf
-from automation.pipeline.crop import crop_pdf
 from automation.pipeline.compress import create_customer_zip
 
 logger = logging.getLogger(__name__)
@@ -172,15 +171,7 @@ class PipelineRunner:
         config = job.config
         current_pdf = src_pdf
 
-        # --- 여백 자르기: CropBox만 줄여 여백을 가린다 (crop_mm 값이 있을 때만) ---
-        # ABBYY 앞에 두어 ABBYY가 잘린 영역만 다시 저장하게 한다 (용량 절감 목적).
-        if any(v > 0 for v in config.crop_mm.values()):
-            self._step(job, "여백 자르기")
-            cropped = tmp / f"{job.book_name}_crop.pdf"
-            if crop_pdf(current_pdf, cropped, config.crop_mm):
-                current_pdf = cropped
-            else:
-                logger.warning(f"여백 자르기 건너뜀 — 원본 사용: {job.book_name}")
+        # 여백 자르기 단계는 없앴다 (자르기는 pdf-level-preview에서 하고 PDF에 이미 들어 있다)
 
         # --- 3가지 Flow 분기 ---
         if config.scan_type == "고급" and config.ocr:
